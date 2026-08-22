@@ -1,0 +1,29 @@
+{
+  "name": "crypto-lab-attribute-gate",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser demo of FAME ciphertext-policy attribute-based encryption over BLS12-381: encrypt to a policy, watch collusion fail, and see the authority read everything.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:a11y": "playwright test --project=a11y",
+    "test:claims": "playwright test --project=claims",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.3.0",
+    "@noble/hashes": "^2.0.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.1.2",
+    "typescript": "~7.0.2",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
+  }
+}

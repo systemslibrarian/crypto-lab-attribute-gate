@@ -1,0 +1,20 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.vitest-cache/
+*.local
+.DS_Store
+
+# Local working copy of the demo-authoring template. The tracked source of
+# truth is crypto-lab/audits/_MASTER-TEMPLATE.md; a committed copy here would
+# age silently and become a second, wrong standard.
+CRYPTO-LAB-TEMPLATE*.md
+
+# The demo brief this lab was built from. Kept local; README.md is the
+# published description.
+brief.md
+
+# Python venv for the independent verifier.
+verification/.venv/
+__pycache__/
