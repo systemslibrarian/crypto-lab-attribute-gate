@@ -202,3 +202,128 @@ export function gateLabel(node: ThresholdNode): string {
   if (n > 1 && node.threshold === 1) return 'OR';
   return `${node.threshold} of ${n}`;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Pure tree edits, for the builder                                           */
+/* -------------------------------------------------------------------------- */
+
+function mapTree(node: PolicyNode, fn: (n: PolicyNode) => PolicyNode | null): PolicyNode | null {
+  if (node.kind === 'attribute') return fn(node);
+  const children = node.children
+    .map((c) => mapTree(c, fn))
+    .filter((c): c is PolicyNode => c !== null);
+  if (children.length === 0) return null;
+  const clamped = Math.min(node.threshold, children.length);
+  return fn({ ...node, children, threshold: clamped });
+}
+
+/** Change k on one gate, clamped to 1..n. */
+export function setThreshold(root: PolicyNode, gateId: string, k: number): PolicyNode {
+  const next = mapTree(root, (n) => {
+    if (n.kind !== 'threshold' || n.id !== gateId) return n;
+    return { ...n, threshold: Math.max(1, Math.min(k, n.children.length)) };
+  });
+  /* c8 ignore next -- mapTree only returns null when every leaf was removed */
+  return next ?? root;
+}
+
+/** Point one leaf at a different attribute. */
+export function setAttributeName(root: PolicyNode, leafId: string, name: string): PolicyNode {
+  const next = mapTree(root, (n) =>
+    n.kind === 'attribute' && n.id === leafId ? { ...n, name } : n,
+  );
+  /* c8 ignore next */
+  return next ?? root;
+}
+
+/**
+ * Drop a leaf.
+ *
+ * A gate left with fewer children than its k has k clamped down, which is the
+ * only sane reading: "2 of 3" with one input removed is "2 of 2".
+ */
+export function removeLeaf(root: PolicyNode, leafId: string): PolicyNode {
+  const next = mapTree(root, (n) => (n.kind === 'attribute' && n.id === leafId ? null : n));
+  return next ?? root;
+}
+
+/** Append a new leaf to a gate. k is left alone unless it would exceed n. */
+export function addLeaf(root: PolicyNode, gateId: string, name: string): PolicyNode {
+  const next = mapTree(root, (n) => {
+    if (n.kind !== 'threshold' || n.id !== gateId) return n;
+    return { ...n, children: [...n.children, attr(name)] };
+  });
+  /* c8 ignore next */
+  return next ?? root;
+}
+
+/**
+ * Replace a leaf with an AND gate over that leaf and a new one.
+ *
+ * This is how the builder grows depth without a drag-and-drop surface: it is
+ * one button, it is keyboard-operable, and the resulting tree is always valid.
+ */
+export function wrapLeafInGate(root: PolicyNode, leafId: string, name: string): PolicyNode {
+  const next = mapTree(root, (n) => {
+    if (n.kind !== 'attribute' || n.id !== leafId) return n;
+    return and([{ ...n, id: nextId('n') }, attr(name)]);
+  });
+  /* c8 ignore next */
+  return next ?? root;
+}
+
+/** Every gate in the tree, in pre-order. */
+export function gatesOf(root: PolicyNode): ThresholdNode[] {
+  const out: ThresholdNode[] = [];
+  const walk = (n: PolicyNode): void => {
+    if (n.kind === 'threshold') {
+      out.push(n);
+      n.children.forEach(walk);
+    }
+  };
+  walk(root);
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Presets                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface Preset {
+  readonly id: string;
+  readonly label: string;
+  readonly note: string;
+  readonly build: () => PolicyNode;
+}
+
+export const PRESETS: readonly Preset[] = [
+  {
+    id: 'headline',
+    label: '(Doctor AND Cardiology) OR Emergency',
+    note: 'The headline policy. Alice and Carol get in; Bob, Dan and Eve do not.',
+    build: () => or([and([attr('Doctor'), attr('Cardiology')]), attr('Emergency')]),
+  },
+  {
+    id: 'reuse',
+    label: '(Doctor AND Cardiology) OR (Doctor AND Emergency)',
+    note: 'Uses Doctor twice, so the one-use transform has to act and every Doctor key doubles.',
+    build: () =>
+      or([and([attr('Doctor'), attr('Cardiology')]), and([attr('Doctor'), attr('Emergency')])]),
+  },
+  {
+    id: 'threshold',
+    label: '2 of 3: Doctor, Cardiology, OnCall',
+    note: 'A real threshold gate, so reconstruction needs Lagrange rather than a sum of ones.',
+    build: () => threshold(2, [attr('Doctor'), attr('Cardiology'), attr('OnCall')]),
+  },
+  {
+    id: 'nested',
+    label: 'Doctor AND (2 of 3: Cardiology, Emergency, OnCall)',
+    note: 'A threshold nested under an AND, so the coefficients multiply down the path.',
+    build: () =>
+      and([
+        attr('Doctor'),
+        threshold(2, [attr('Cardiology'), attr('Emergency'), attr('OnCall')]),
+      ]),
+  },
+];

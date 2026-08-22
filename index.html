@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <script>
+      // Dark is the only theme. Pin it before first paint, and overwrite any
+      // 'light' a visitor stored back when the header carried a theme toggle.
+      (function () {
+        try {
+          localStorage.setItem('theme', 'dark');
+        } catch (e) {}
+        document.documentElement.setAttribute('data-theme', 'dark');
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Interactive FAME ciphertext-policy attribute-based encryption over BLS12-381: compose an access policy, seal a record through the ABE-KEM, HKDF-SHA-256 and AES-256-GCM, and pool two keys that jointly satisfy the policy to watch collusion fail."
+    />
+
+    <!-- Social meta -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Attribute Gate — crypto-lab" />
+    <meta
+      property="og:description"
+      content="Encrypt to a policy instead of to a person, then watch two users whose attributes jointly satisfy that policy still fail to decrypt together."
+    />
+    <meta property="og:url" content="https://systemslibrarian.github.io/crypto-lab-attribute-gate/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Attribute Gate — crypto-lab" />
+    <meta
+      name="twitter:description"
+      content="Encrypt to a policy instead of to a person, then watch two users whose attributes jointly satisfy that policy still fail to decrypt together."
+    />
+
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%9B%82</text></svg>"
+    />
+    <title>Attribute Gate — crypto-lab</title>
+  </head>
+  <body>
+<style>
+  .cl-topbar{
+    /* The bar is always dark (#0b1512) regardless of page theme, so header
+       text must always be light. Mix each lab's --accent toward near-white so
+       the hue still tints the brand but contrast stays >=4.5:1 on the bar even
+       when a lab's accent is dark (e.g. a light-theme #1a56db). */
+    --cl-ink: color-mix(in srgb, var(--accent, #35d6bb) 60%, #eafff8);
+    display:flex;align-items:center;justify-content:space-between;gap:1rem;
+    padding:.7rem clamp(.9rem,3vw,2rem);
+    background:#0b1512;
+    border-bottom:1px solid color-mix(in srgb, var(--accent, #35d6bb) 22%, transparent);
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    position:sticky;top:0;z-index:1000;
+  }
+  .cl-brand{display:flex;align-items:center;gap:.8rem;text-decoration:none}
+  .cl-badge{
+    flex:0 0 auto;display:grid;place-items:center;width:40px;height:40px;
+    border:1.5px solid var(--accent, #35d6bb);border-radius:10px;
+    color:var(--cl-ink);font-weight:700;font-size:.95rem;letter-spacing:.05em;
+  }
+  .cl-brand-text{display:flex;flex-direction:column;line-height:1.15}
+  .cl-title{color:#eafff8;font-weight:700;font-size:1.05rem;letter-spacing:.12em}
+  .cl-sub{color:#5e8b80;font-size:.72rem;letter-spacing:.04em}
+  .cl-actions{display:flex;align-items:center;gap:.5rem}
+  .cl-btn{
+    display:inline-flex;align-items:center;gap:.4rem;
+    padding:.5rem .85rem;border-radius:10px;
+    /* WCAG 1.4.11. No fill, so this border is the whole control boundary, and
+       mixing the PAGE's --accent ties the ratio to each lab's palette: all 156
+       labs using this form fail, and for dark accents 3:1 is unreachable at any
+       mix percentage. --cl-ink already mixes toward the bar's near-white ink,
+       so mixing it is accent-independent. */
+    border:1px solid color-mix(in srgb, var(--cl-ink) 70%, transparent);
+    background:transparent;color:var(--cl-ink);cursor:pointer;
+    font:inherit;font-size:.78rem;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;text-decoration:none;transition:background .15s,border-color .15s,color .15s;
+  }
+  .cl-btn:hover{
+    background:color-mix(in srgb, var(--accent, #35d6bb) 14%, transparent);
+    border-color:var(--accent, #35d6bb);color:#eafff8;
+  }
+  .cl-btn svg{width:15px;height:15px}
+  .cl-icon{padding:.5rem .6rem;font-size:.95rem}
+  /* Skip-to-content link: first focusable element so keyboard users can bypass
+     this sticky header (WCAG 2.4.1). Hidden until focused. Fixed light-on-dark
+     pair (not --accent, which can be a dark hue on some labs) keeps contrast AA. */
+  .cl-skip-link{
+    position:absolute;left:.5rem;top:-3rem;z-index:1001;
+    padding:.55rem 1rem;border-radius:0 0 10px 10px;
+    background:#eafff8;color:#0b1512;
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    font-weight:700;font-size:.8rem;letter-spacing:.04em;text-decoration:none;
+    transition:top .15s ease;
+  }
+  .cl-skip-link:focus{top:0;outline:2px solid var(--accent,#35d6bb);outline-offset:2px;}
+  /* Dark is the only theme, so hide any in-page theme toggle a lab still
+     ships. The element stays in the DOM so the lab's theme JS keeps working. */
+  body :is(#theme-toggle,#themeToggle,.theme-toggle,.theme-toggle-btn,[data-theme-toggle]){display:none!important}
+  @media(max-width:560px){
+    .cl-sub{display:none}
+    .cl-btn span{display:none}
+    .cl-btn svg{margin:0}
+  }
+  /* cl-a11y-touch: WCAG 2.5.5 target size on touch pointers only, so the
+     bar keeps its density on desktop where a mouse is precise. */
+  @media (pointer: coarse){
+    /* Height is free -- it costs no horizontal room, so every touch target
+       gets the full 44px vertically. */
+    .cl-btn,.cl-icon{min-height:44px}
+  }
+  /* Width only where the bar can afford it. Below ~380px, three 44px-wide
+     buttons plus the brand overflow the viewport, and forcing horizontal
+     scroll would trade a 2.5.5 (AAA) gain for a 1.4.10 reflow failure.
+     The buttons stay ~31px wide there, comfortably over the 24px 2.5.8 (AA) floor. */
+  @media (pointer: coarse) and (min-width: 380px){
+    .cl-btn,.cl-icon{min-width:44px}
+  }
+</style>
+<a class="cl-skip-link" href="#app">Skip to content</a>
+<header class="cl-topbar" role="banner" aria-label="Crypto Lab">
+  <a class="cl-brand" href="https://crypto-lab.systemslibrarian.dev/" aria-label="Crypto Lab home">
+    <span class="cl-badge">CL</span>
+    <span class="cl-brand-text">
+      <span class="cl-title">CRYPTO LAB</span>
+      <span class="cl-sub">systemslibrarian.dev</span>
+    </span>
+  </a>
+  <nav class="cl-actions" aria-label="Crypto Lab navigation">
+    <a class="cl-btn" href="https://crypto-lab.systemslibrarian.dev/" aria-label="Crypto Lab menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <span>Menu</span>
+    </a>
+    <a class="cl-btn" href="https://github.com/systemslibrarian/crypto-lab-attribute-gate" target="_blank" rel="noopener" aria-label="View this project on GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7 0-.7 0-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+      <span>GitHub</span>
+    </a>
+  </nav>
+</header>
+<script>
+  (function () {
+    // A page may have only one banner landmark. This shared site header is it;
+    // demote any banner a lab also declared on its own page header (explicit
+    // role="banner", or an implicit <header> child of <body>) so landmarks stay unique.
+    function dedupeBanner() {
+      var bar = document.querySelector('.cl-topbar');
+      if (!bar) return;
+      document.querySelectorAll('[role="banner"]').forEach(function (el) {
+        if (el !== bar) el.setAttribute('role', 'group');
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('header'), function (el) {
+        if (el === bar || el.hasAttribute('role')) return;
+        // <header> only implies banner when it is NOT scoped inside sectioning content.
+        // Checking closest() catches heroes nested in #app, which body.children missed.
+        if (el.closest('main, article, aside, nav, section')) return;
+        el.setAttribute('role', 'group');
+      });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dedupeBanner);
+    else dedupeBanner();
+  })();
+</script>
+    <div id="app">
+      <header class="cl-hero">
+        <div class="cl-hero-main">
+          <h1 class="cl-hero-title">Attribute Gate</h1>
+          <p class="cl-hero-sub">CP-ABE · FAME · Agrawal-Chase, CCS 2017</p>
+          <p class="cl-hero-desc">
+            Composes an access policy, seals a record under it with real FAME encryption over
+            BLS12-381, and lets you pool two keys that jointly satisfy the policy so you can watch
+            the decryption fail term by term.
+          </p>
+        </div>
+        <aside class="cl-hero-why" aria-label="Why it matters">
+          <span class="cl-hero-why-label">WHY IT MATTERS</span>
+          <p class="cl-hero-why-text">
+            Encrypting to a rule instead of a named recipient is how shared medical, legal and
+            archival data can be locked down without knowing in advance who will need it. The whole
+            idea collapses if two people can combine their credentials — and it is the one property
+            no ABE explainer ever shows you.
+          </p>
+        </aside>
+      </header>
+
+      <noscript>
+        <p class="intro">
+          This lab runs BLS12-381 pairings in the browser, so it needs JavaScript. Nothing is sent
+          anywhere: every key is generated in this tab and discarded when you close it.
+        </p>
+      </noscript>
+
+      <div id="exhibits"></div>
+
+      <footer class="scripture-footer">
+        <p>So whether you eat or drink or whatever you do, do it all for the glory of God. — 1 Corinthians 10:31</p>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
