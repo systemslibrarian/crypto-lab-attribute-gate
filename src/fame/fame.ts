@@ -348,14 +348,27 @@ export function decrypt(ct: Ciphertext, sk: SecretKey): DecryptResult {
   const rec = reconstruct(ct.policy, ct.msp, held);
 
   if (!rec.satisfied) {
-    const unsatisfiedRows = ct.msp.rows.filter((r) => !held.has(r.label)).map((r) => r.index);
+    const missing = ct.msp.rows.filter((r) => !held.has(r.label));
+    const unsatisfiedRows = missing.map((r) => r.index);
     const gate = [...rec.status.entries()].find(
       ([, s]) => !s.satisfied && s.reason === 'THRESHOLD_NOT_MET',
     );
-    const detail =
-      gate && !gate[1].satisfied && gate[1].reason === 'THRESHOLD_NOT_MET'
-        ? `THRESHOLD_NOT_MET: a gate needed ${gate[1].need} satisfied inputs and had ${gate[1].have}`
-        : `ATTR_MISSING: rows ${unsatisfiedRows.join(', ')} are labelled with attributes this key does not hold`;
+    // Name BOTH causes. A gate shortfall says how the policy failed; the row
+    // labels say which attributes would have fixed it, and after the one-use
+    // transform those labels are indexed, so "Doctor:2" is genuinely different
+    // information from "Doctor".
+    const parts: string[] = [];
+    if (gate && !gate[1].satisfied && gate[1].reason === 'THRESHOLD_NOT_MET') {
+      parts.push(
+        `THRESHOLD_NOT_MET: a gate needed ${gate[1].need} satisfied inputs and had ${gate[1].have}`,
+      );
+    }
+    if (missing.length > 0) {
+      parts.push(
+        `ATTR_MISSING: ${missing.map((r) => `row ${r.index} wants ${r.label}`).join(', ')}`,
+      );
+    }
+    const detail = parts.join(' \u00b7 ');
     return { ok: false, code: 'POLICY_UNSATISFIED', reconstruction: rec, unsatisfiedRows, detail };
   }
 
