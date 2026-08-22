@@ -849,7 +849,14 @@ export class App {
     );
     const note = PRESETS.find((p) => formatPolicy(p.build()) === formatPolicy(this.policy));
     this.refresh('preset-note', note ? note.note : 'Edited policy.');
-    this.refresh('pipeline', renderPipeline(this.envelope, this.aesKeyHex));
+    this.refresh(
+      'pipeline',
+      renderPipeline(
+        this.envelope,
+        this.aesKeyHex,
+        this.envelope ? gtToHex(this.envelope.witness.encapsulated) : null,
+      ),
+    );
     this.refresh('transform', renderTransform(this.msp.transform, this.lab.registry.snapshot()));
     this.refreshMatrix();
     this.refreshPeople();

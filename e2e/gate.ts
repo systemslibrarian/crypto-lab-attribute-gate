@@ -754,15 +754,26 @@ export async function driveAllStates(page: Page, prefix: string): Promise<void> 
   ).toHaveCount(2);
   await scanAt('collusion — six stages, the ledger, both splice directions blocked');
 
-  // The same machinery on a coherent key: the residual is the identity and the
-  // record opens, which is the control case for the exhibit above.
+  // The two non-collusion branches, which render a different panel entirely:
+  // one holder already qualifies alone, or the union still does not qualify.
   await page.selectOption('#collude-a', 'Alice');
   await page.selectOption('#collude-b', 'Carol');
   await page.getByRole('button', { name: 'Pool the keys and decrypt' }).click();
-  await expect(page.locator('[data-host="collusion"] [data-stage="6"]')).toBeVisible();
-  await scanAt('collusion — two holders who each already satisfy the policy');
+  await expect(
+    page.locator('[data-host="collusion"] [data-scenario="not-collusion"]'),
+  ).toBeVisible();
+  await scanAt('collusion — a holder who already qualifies alone, so it is not collusion');
+
+  await page.selectOption('#collude-a', 'Bob');
+  await page.selectOption('#collude-b', 'Dan');
+  await page.getByRole('button', { name: 'Pool the keys and decrypt' }).click();
+  await expect(
+    page.locator('[data-host="collusion"] [data-scenario="not-collusion"]'),
+  ).toContainText('not collusion resistance');
+  await scanAt('collusion — a pair whose union still fails the policy check');
 
   // Same-holder rejection: the one branch that renders no stages at all.
+  await page.selectOption('#collude-a', 'Alice');
   await page.selectOption('#collude-b', 'Alice');
   await page.getByRole('button', { name: 'Pool the keys and decrypt' }).click();
   await expect(page.locator('[data-host="collusion"]')).toContainText('two different holders');

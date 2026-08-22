@@ -173,6 +173,19 @@ Second, it **pins its own**, in `vectors/fame-vectors.json`: a complete run — 
 
 `e2e/claims.spec.ts` asks whether the *page* is honest, which is a different question from whether the *code* is correct. It mixes cross-checks between two surfaces that must agree (a key card's element count against the labels it lists; the rendered failure-code table against the exported constants), independent re-derivations (the reconstruction recomputed from the numbers parsed back out of the rendered matrix, with a modular inverse computed by Fermat rather than by the extended Euclid the page uses), and parts-sum-to-whole checks (matrix columns against `1 + Σ(k−1)` over the gate controls on screen). It also holds the negative claims as fixtures — the revoked key opening a later record, escrow as two steps — plus retirement, a no-op guard, and the `[hidden]` cascade probe.
 
+### Proving the gates bite
+
+A green suite is not evidence until it has been watched failing. Four mutations were applied to the source, one at a time, each confirmed to leave the build succeeding and the bundle hash changed before the owning gate was run, and each reverted immediately afterwards with the hash returning to its pre-mutation value:
+
+| Mutation | Owning gate | What it reported |
+|---|---|---|
+| `Decrypt` returns `den / num` instead of `num / den` | `fame.test.ts` | 10 failures — every round trip, both escrow cases, the collusion residual and NEG-1 |
+| `indexedLabel` collapses every copy to `:1` (the reference implementation's index-stripping bug) | `msp.test.ts`, `vectors.test.ts` | Failures naming `ATTRIBUTE_REUSED: row label "Doctor:1" appears twice` |
+| The Lagrange numerator loses its sign | `msp.test.ts` | 7 failures — the basis no longer sums to 1, and equation 2.1 fails on every policy shape |
+| `--border-strong` degraded to the original token | `a11y.spec.ts` | Non-text contrast failures naming every button, select and input at 2.14:1 and 1.97:1 against a 3:1 requirement |
+
+The first attempt at the first mutation is worth recording: replacing `gtDiv` with `gtMul` left `gtDiv` unused, `tsc` refused the build, and the suite would then have run against the previous bundle — a mutation that breaks the build proves nothing at all.
+
 ### The accessibility gate
 
 `npm run build && npm run test:a11y` must pass with **zero violations** before anything deploys. The gate scans the production build in Chromium at desktop and phone width, driving the page through every state it renders — including the refusals, `MALFORMED_POLICY`, the collusion walkthrough, and every disclosure opened through its own `<summary>`. It asserts axe's `incomplete` bucket as well as `violations`, computes contrast arithmetically over composited surfaces (because every meaningful fill here is a `color-mix()` axe declines to resolve), measures non-text contrast against a ratcheting baseline, and adds the reflow and keyboard-reachability checks axe has no rules for.
@@ -185,13 +198,13 @@ Wall-clock figures from a browser say more about the reader's machine than about
 
 | Operation | Cost |
 |---|---|
-| Setup | 1 pairing, 5 exponentiations |
-| KeyGen for an attribute set `S` | `6(\|S\|+1)` hash-to-curve queries, `8(\|S\|+1)` G1 exponentiations, 3 in G2 |
-| Key size | `3 + 3\|S\| + 3` group elements (`sk0` in G2, one triple per attribute in G1, `sk'` in G1) |
-| Encrypt over an `n1 × n2` MSP | `6n1(n2+1)` hash-to-curve queries, `6n1(n2+1)` G1 exponentiations, 3 in G2, 2 in GT |
-| **Decrypt** | **6 pairings, whatever the policy is**, plus one G1 exponentiation per used row |
+| Setup | 1 pairing; 3 exponentiations in G1, 2 in G2, 2 in GT |
+| KeyGen for an attribute set `S` | `6(\|S\|+1)` distinct oracle queries, `9(\|S\|+1)` G1 exponentiations, 3 in G2 |
+| Key size | `3\|S\| + 6` group elements — `sk0` is 3 in G2, `sk'` is 3 in G1, and each attribute adds a triple in G1 |
+| Encrypt over an `n1 × n2` MSP | `6(n1 + n2)` distinct oracle queries; `6n1` G1 exponentiations for the `s_t` factors plus one per non-zero matrix entry per `(ℓ, t)`; 3 in G2, 2 in GT |
+| **Decrypt** | **6 pairings, whatever the policy is**, plus 3 G1 exponentiations per row the reconstruction uses |
 
-The last line is FAME's headline result, and it is the reason the scheme exists: earlier fully secure CP-ABE constructions paid a pairing per attribute. Here decryption is six pairings for a two-row policy and six for a sixty-row one; everything that grows with the policy is exponentiation in `G1`, the cheap group.
+The last line is FAME's headline result, and it is the reason the scheme exists: earlier fully secure CP-ABE constructions paid a pairing per attribute. Here decryption is six pairings for a two-row policy and six for a sixty-row one; everything that grows with the policy is exponentiation in `G1`, the cheap group. The oracle count is `6(n1 + n2)` rather than `6·n1·n2` because the column hashes are shared across every row — and the `n2` term is the same set of points `KeyGen` already queried for `sk'`, which is why the two sides agree at all.
 
 That constant is **shown, not asserted**. Every verdict on the page prints the number of pairings the attempt actually computed, counted at the primitive; `src/fame/system.test.ts` asserts it is exactly 6 for policies of different sizes, and 0 when the policy check fails before decryption runs. The one-use transform's cost is displayed the same way — the key-size column in exhibit 2 is a count, not a claim.
 

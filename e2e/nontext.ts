@@ -9,26 +9,27 @@ import type { Page } from '@playwright/test';
  * reach a `::before`/`::after` glyph, because a pseudo-element is not an
  * element and owns no text node.
  *
- * IN THIS LAB the control-boundary half is the live one. `src/style.css` has
- * the boundary token — `--control-border`, defined in both themes and applied
- * to `.mono-input`/`.msg-input` and, since the 1.4.11 pass that landed in
- * `9596c01`, to the base `.btn` — but tokens are discarded by overrides, and
- * that is what this oracle exists to measure rather than trust. Three shapes
- * on this page override or bypass it: `.btn-primary` repaints its border the
- * SAME colour as its own accent fill, so it has no edge of its own and lives
- * or dies by fill-vs-surround (which the gold accent does not clear on the
- * white light-theme surface); `.seg-btn` declares `border: none` and leans on
- * its `.seg` wrapper, whose border is the decorative `--border` divider; and
- * `.tab-btn.active` overrides to `--accent-ink`, the fix from that same
- * commit. This oracle judges each control as painted, at every driven state —
- * including the rejected-preset and `aria-invalid` recolourings only the
- * drive reaches.
+ * BOTH HALVES ARE LIVE IN THIS LAB.
  *
- * The generated-content half is inert in this repo today — the stylesheet
- * declares no `content` at all; the only generated marks are the `<summary>`
- * disclosure triangles, which are `::marker`, the UA's own. It runs anyway,
- * at every state, so that stays a measurement rather than a reading of the
- * stylesheet.
+ * The control-boundary half found real defects on its first run. `src/style.css`
+ * separates two tokens on purpose: `--border` is decorative (panel edges,
+ * table rules) and `--border-strong` is the CONTROL boundary, applied to
+ * `.btn`, `.select` and `.text-input`. The original `--border-strong` was
+ * `#3c4d5e`, which measures 2.14:1 against `--panel` — under the 3:1 floor —
+ * and every button, select and input on the page failed. It was raised to
+ * `#5c7181` (3.67:1) rather than baselined. Two shapes still bypass the token
+ * and are judged on fill instead: `.btn-primary` paints its border the SAME
+ * colour as its accent fill, so it has no edge of its own and lives or dies
+ * by fill-vs-surround (the sky accent clears it at 8.6:1), and `.btn-danger`
+ * recolours to `--bad`. This oracle judges each control as painted, at every
+ * driven state, including the hover repaints only the drive reaches.
+ *
+ * The generated-content half is live too, and it guards something real: this
+ * stylesheet declares two author `content` marks. `.select-wrap::after` is the
+ * chevron that is the ONLY affordance saying a select is a select, because
+ * `appearance: none` removed the native one — if that glyph is invisible, the
+ * control is a rectangle. `.disclose-summary::before` is the triangle on all
+ * seven disclosures, which is what says a block can be opened.
  *
  * TWO SEPARATE CHECKS LIVE HERE.
  *
@@ -370,13 +371,12 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
     /**
      * Style and geometry are memoised per element for one pass.
      *
-     * A driven pass here walks six tabpanels, and the expensive part is the
-     * BIP-340 vectors panel: nineteen `.kat-item` disclosures, each with a
-     * summary pill and, once opened, five hex fields and a hand-off button —
-     * all siblings re-walking the same ancestors up to `<body>`. Without the
-     * caches the pass re-reads the same computed styles and rects tens of
-     * thousands of times. Nothing mutates the DOM during the pass, so the
-     * cached values cannot go stale.
+     * A driven pass here walks eight panels with every exhibit rendered at
+     * once — five key cards with three buttons apiece, a tree of nested
+     * gate and attribute selects, and five tables — all siblings re-walking
+     * the same ancestors up to `<body>`. Without the caches the pass re-reads
+     * the same computed styles and rects tens of thousands of times. Nothing
+     * mutates the DOM during the pass, so the cached values cannot go stale.
      */
     const styleCache = new Map<Element, CSSStyleDeclaration>();
 
@@ -501,19 +501,19 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
       // delineated by one side only — elsewhere in this fleet that reported
       // 1.12:1 for a selected tab whose entire boundary was a 3px
       // `border-bottom` underline, the ARIA tab pattern's normal delineator.
-      // This lab's tabs happen to paint all four sides today; the per-side
+      // Every control on this page paints all four sides today; the per-side
       // walk is what keeps that an implementation detail rather than a
-      // load-bearing assumption.
+      // load-bearing assumption, and it is the fix 129 of 131 gates in this
+      // fleet are still missing.
       //
       // A side also has to be OPAQUE ENOUGH TO PAINT. `border: 1px solid
       // transparent` is a layout spacer, not a delineator — it reserves the
       // 1px a coloured state will later occupy so nothing shifts. This page
-      // uses exactly that on `.tab-btn`, whose ACTIVE state fills the border
-      // in with `--accent-ink`; counting the transparent spacer as a border
-      // would make the five unselected tabs — no fill, no painted edge,
-      // identified by their text alone, exactly the case the "is it trying to
-      // draw itself as a control?" test below exists to exclude — report
-      // 1.00:1 apiece.
+      // does not currently use that idiom; every control border here is a
+      // solid token. The check stays because the alternative — trusting
+      // `border-width` alone — silently counts a spacer as a boundary, which
+      // turns a control identified by its text alone into a phantom 1.00:1
+      // failure.
       const SIDES = ['top', 'right', 'bottom', 'left'] as const;
       const paintedSides = SIDES.filter((side) => {
         if (parseFloat(cs.getPropertyValue(`border-${side}-width`) || '0') <= 0) return false;

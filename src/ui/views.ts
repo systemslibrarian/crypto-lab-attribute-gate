@@ -362,7 +362,11 @@ export function renderReconstruction(msp: Msp, rec: Reconstruction): HTMLElement
  * the boundary is the difference between teaching the truth and implying that
  * the policy is somehow wrapped around the bytes of the record.
  */
-export function renderPipeline(env: Envelope | null, aesKeyHex: string | null): HTMLElement {
+export function renderPipeline(
+  env: Envelope | null,
+  aesKeyHex: string | null,
+  encapsulatedHex: string | null,
+): HTMLElement {
   const stage = (
     kicker: string,
     title: string,
@@ -389,8 +393,8 @@ export function renderPipeline(env: Envelope | null, aesKeyHex: string | null): 
       'attribute-based',
       'FAME encapsulates',
       'A fresh random element of GT is encrypted under the policy. This is the only attribute-based step.',
-      env
-        ? elementRef('GT', '')
+      env && encapsulatedHex
+        ? el('span', { class: 'pipe-value' }, elementRef('GT', encapsulatedHex))
         : el('span', { class: 'pipe-value', text: 'not sealed yet' }),
       'pipe-stage-abe',
     ),
