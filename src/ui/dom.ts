@@ -7,6 +7,8 @@
  *  - anything that scrolls is a labelled, focusable region.
  */
 
+import { rationalForm } from '../fame/bls';
+
 export type Child = Node | string | null | undefined | false;
 
 export interface ElOptions {
@@ -146,16 +148,41 @@ export function disclosure(summary: string, ...children: Child[]): HTMLDetailsEl
   return d;
 }
 
-/** A horizontally scrollable wrapper that keyboard users can reach and read. */
+/**
+ * A horizontally scrollable wrapper that keyboard users can reach and read.
+ *
+ * `role="group"` rather than `role="region"`: a named region IS a landmark, and
+ * this page renders several scrollers at once (the matrix, the one-use table,
+ * the collusion ledger, the residual comparison, the failure-code reference),
+ * which would turn the landmark structure into a list of tables. `group` with
+ * an accessible name satisfies the same requirement -- WCAG 2.1.1, a scrolling
+ * container needs a keyboard route and a name -- without the landmark noise.
+ */
 export function scroller(label: string, ...children: Child[]): HTMLElement {
   return el(
     'div',
     {
       class: 'scroller',
-      attrs: { role: 'region', 'aria-label': label, tabindex: '0' },
+      attrs: { role: 'group', 'aria-label': label, tabindex: '0' },
     },
     ...children,
   );
+}
+
+/**
+ * A pre-formatted formula block.
+ *
+ * `white-space: pre` plus `overflow-x: auto` makes this a scrolling container,
+ * and a scrolling container with no focusable content inside it is unreachable
+ * from the keyboard (WCAG 2.1.1) -- so it needs `tabindex="0"` and a name. The
+ * gate's `expectScrollersReachable` found exactly this on the first run.
+ */
+export function formula(label: string, text: string): HTMLElement {
+  return el('pre', {
+    class: 'formula',
+    text,
+    attrs: { role: 'group', 'aria-label': label, tabindex: '0' },
+  });
 }
 
 /** A polite live region for results the user causes. */
@@ -223,10 +250,22 @@ export function elementRef(group: string, hex: string): HTMLElement {
   );
 }
 
-/** Render a field element small-negative-aware, so -1 does not read as p-1. */
+/**
+ * Render a field element the way a reader can use it.
+ *
+ * Three cases, in order. A small positive value prints as itself. A value just
+ * below p prints as the small negative it is, because -1 written as a 77-digit
+ * number teaches nothing. Anything else is offered to rational reconstruction:
+ * a Lagrange coefficient of 3/2 is a modular inverse in Z_p and prints as a
+ * 64-hex blob otherwise, which is exactly the case where the arithmetic
+ * becomes unreadable. Only a verified reconstruction is used; everything left
+ * over prints as truncated hex and is honest about being truncated.
+ */
 export function fieldEntry(value: bigint, order: bigint): string {
-  const window_ = 1_000_000n;
-  if (value < window_) return value.toString();
-  if (value > order - window_) return `-${(order - value).toString()}`;
+  const small = 1_000_000n;
+  if (value < small) return value.toString();
+  if (value > order - small) return `-${(order - value).toString()}`;
+  const r = rationalForm(value);
+  if (r) return `${r.num}/${r.den}`;
   return `0x${value.toString(16).slice(0, 8)}…`;
 }

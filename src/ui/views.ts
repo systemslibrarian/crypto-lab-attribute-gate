@@ -18,6 +18,7 @@ import {
   el,
   elementRef,
   fieldEntry,
+  formula,
   icon,
   scroller,
   select,
@@ -331,7 +332,10 @@ export function renderReconstruction(msp: Msp, rec: Reconstruction): HTMLElement
   const ok = isTargetVector(combined);
   wrap.appendChild(el('h4', { text: 'The combination, recomputed from the matrix' }));
   wrap.appendChild(
-    el('span', { class: 'formula' }, `sum gamma_i * M_i  =  (${combined.map((x) => fieldEntry(x, ORDER)).join(', ')})`),
+    formula(
+      'The reconstruction, recomputed from the matrix rows',
+      `sum gamma_i * M_i  =  (${combined.map((x) => fieldEntry(x, ORDER)).join(', ')})`,
+    ),
   );
   wrap.appendChild(
     el(

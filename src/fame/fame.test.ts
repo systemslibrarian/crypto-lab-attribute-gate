@@ -24,6 +24,7 @@ import {
   mulMod,
   ORDER,
   pairing,
+  rationalForm as rationalFormImpl,
 } from './bls';
 import { inField, seededRandom } from './rand';
 import { and, attr, or, threshold, type PolicyNode } from './policy';
@@ -491,5 +492,37 @@ describe('NEG-1 -- no revocation', () => {
     const r = decrypt(ciphertext, key);
     expect(r.ok).toBe(true);
     if (r.ok) expect(gtEquals(r.recovered, message)).toBe(false);
+  });
+});
+
+describe('rational reconstruction, so Lagrange coefficients stay readable', () => {
+  it('recovers the small rationals a threshold gate produces', () => {
+    const rationalForm = rationalFormImpl;
+    expect(rationalForm(divMod(3n, 2n))).toEqual({ num: 3n, den: 2n });
+    expect(rationalForm(mod(-divMod(1n, 2n)))).toEqual({ num: -1n, den: 2n });
+    expect(rationalForm(2n)).toEqual({ num: 2n, den: 1n });
+    expect(rationalForm(mod(-1n))).toEqual({ num: -1n, den: 1n });
+    expect(rationalForm(0n)).toEqual({ num: 0n, den: 1n });
+  });
+
+  it('verifies before it reports, so nothing is rendered as a fraction it is not', () => {
+    // A uniformly random field element is not a small rational, and the
+    // verification step is what makes that a fact rather than a hope.
+    const r = rationalFormImpl(rng.scalar('rational-random'));
+    expect(r).toBeNull();
+  });
+
+  it('round-trips: every reported fraction really equals the element', () => {
+    for (const [a, b] of [
+      [3n, 2n],
+      [5n, 7n],
+      [-11n, 13n],
+      [1n, 999983n],
+    ] as const) {
+      const v = mod(divMod(a, b));
+      const r = rationalFormImpl(v);
+      expect(r).not.toBeNull();
+      if (r) expect(mod(divMod(r.num, r.den))).toBe(v);
+    }
   });
 });

@@ -86,6 +86,44 @@ export function divMod(a: bigint, b: bigint): bigint {
   return mulMod(a, invMod(b));
 }
 
+/**
+ * Recover a small rational a/b from a field element, or return null.
+ *
+ * Lagrange coefficients are small rationals -- 2, -1, 3/2, -1/2 -- but in Z_p
+ * a denominator is a modular inverse, so 3/2 prints as a 64-digit number that
+ * tells a reader nothing. Rational reconstruction is the standard way back:
+ * run the extended Euclidean algorithm on (p, v) and stop as soon as the
+ * remainder drops below the bound; the remainder is then the numerator and the
+ * accumulated cofactor is the denominator.
+ *
+ * The result is VERIFIED before it is returned (a * b^-1 must equal v), so a
+ * value that merely happens to produce small intermediates cannot be
+ * mis-rendered as a fraction it is not.
+ */
+export function rationalForm(
+  v: bigint,
+  bound = 1_000_000n,
+): { readonly num: bigint; readonly den: bigint } | null {
+  const value = mod(v);
+  let [r0, r1] = [ORDER, value];
+  let [t0, t1] = [0n, 1n];
+  while (r1 > bound) {
+    const q = r0 / r1;
+    [r0, r1] = [r1, r0 - q * r1];
+    [t0, t1] = [t1, t0 - q * t1];
+  }
+  let num = r1;
+  let den = t1;
+  if (den === 0n) return null;
+  if (den < 0n) {
+    num = -num;
+    den = -den;
+  }
+  if (den > bound) return null;
+  if (mod(num) !== mulMod(value, den)) return null;
+  return { num, den };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Group operations, in multiplicative notation to match the paper            */
 /* -------------------------------------------------------------------------- */

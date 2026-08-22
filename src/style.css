@@ -324,6 +324,12 @@ body {
   display: inline-flex;
   flex-direction: column;
   gap: 0.25rem;
+  /* A <select> sizes itself to its widest OPTION, and the preset list carries
+     a 44-character policy expression. Without these two the control is 388px
+     wide inside a 380px viewport and the document scrolls sideways -- a WCAG
+     1.4.10 reflow failure the gate caught on its first run. */
+  max-width: 100%;
+  min-width: 0;
 }
 
 .field-label {
@@ -353,6 +359,7 @@ body {
 }
 
 #app .select {
+  max-width: 100%;
   appearance: none;
   -webkit-appearance: none;
   font: inherit;
@@ -493,13 +500,15 @@ body {
   color: var(--text);
 }
 
+/* A pre-formatted, horizontally scrollable block. It is focusable and named
+   by `dom.ts`'s `formula()` so the keyboard can reach what it clips. */
 .formula {
   display: block;
+  margin: 0.5rem 0;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 0.55rem 0.7rem;
-  margin: 0.5rem 0;
   white-space: pre;
   overflow-x: auto;
   line-height: 1.5;

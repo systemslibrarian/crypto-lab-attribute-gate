@@ -45,6 +45,7 @@ import {
   clear,
   disclosure,
   el,
+  formula,
   icon,
   liveRegion,
   scroller,
@@ -273,9 +274,8 @@ export class App {
               '"The standard method is to use a key encapsulation mechanism (KEM) wherein a random element of GT is ABE encrypted and hashed to derive a session key. This key is then used to encrypt the plaintext data through a fast symmetric key scheme like AES."',
           }),
         ),
-        el(
-          'span',
-          { class: 'formula' },
+        formula(
+          'The hybrid pipeline, step by step',
           'K  <-- random element of GT\nct  = FAME.Encrypt(pk, policy, K)          <- the only attribute-based step\nk   = HKDF-SHA-256(serialize(K), salt, info)   576 bytes in, 32 out\nc   = AES-256-GCM(k, nonce, record, aad = policy string)',
         ),
         el('p', {}, `salt = "${HKDF_SALT}"`),
@@ -347,9 +347,8 @@ export class App {
           {},
           'Every gate is a k-of-n threshold gate: OR is 1-of-n, AND is n-of-n. A gate holding share lambda splits it with a random degree-(k-1) polynomial q, where q(0) = lambda, and gives child i the value q(i). In matrix terms the child inherits its parent row and appends (i, i^2, ..., i^(k-1)) in k-1 freshly allocated columns. An OR gate allocates nothing, because a constant polynomial hands every child the same share.',
         ),
-        el(
-          'span',
-          { class: 'formula' },
+        formula(
+          'How a child row of a k-of-n gate is built',
           'child i of a k-of-n gate:   [ parent row | i^1  i^2  ...  i^(k-1) ]\nOR (k = 1):                 [ parent row ]                (no new column)\nAND over n (k = n):         adds n-1 columns',
         ),
         el(
@@ -377,9 +376,8 @@ export class App {
       this.hostLive('attempt', 'Decryption attempt result'),
       disclosure(
         'What a key actually is',
-        el(
-          'span',
-          { class: 'formula' },
+        formula(
+          'The three parts of a FAME secret key',
           "sk0  = ( h^(b1 r1),  h^(b2 r2),  h^(r1 + r2) )                       in G2\nsk_y = ( sk_y1, sk_y2, g^(-sigma_y) )                                in G1\n  sk_yt = H(y,1,t)^(b1 r1/a_t) H(y,2,t)^(b2 r2/a_t) H(y,3,t)^((r1+r2)/a_t) g^(sigma_y/a_t)\nsk'  = ( sk'_1, sk'_2, g^d3 g^(-sigma') )                            in G1\n  sk'_t = g^(d_t) H(0,1,1,t)^(b1 r1/a_t) H(0,1,2,t)^(b2 r2/a_t) H(0,1,3,t)^((r1+r2)/a_t) g^(sigma'/a_t)",
         ),
         el(
@@ -456,9 +454,8 @@ export class App {
           {},
           'Work the exponents through the decryption equation for a key whose sk0 and sk’ came from holder A and whose component for row i came from holder o(i):',
         ),
-        el(
-          'span',
-          { class: 'formula' },
+        formula(
+          'The leftover blinding factor',
           'recovered / message  =  prod_i prod_{l,t}  e( H(pi(i), l, t), h ) ^ ( gamma_i * s_t * (Br^A_l - Br^o(i)_l) )',
         ),
         el(
@@ -679,9 +676,28 @@ export class App {
 
   /* ------------------------------------------------------------- behaviour */
 
+  /**
+   * Adopt a new policy, or explain why it cannot be adopted.
+   *
+   * Two guards, and both are load bearing:
+   *
+   *  - A NO-OP EDIT CHANGES NOTHING. Re-selecting the preset already showing,
+   *    or setting a gate to the k it already has, must not retire a verdict
+   *    the reader just produced. The comparison is on the rendered formula
+   *    rather than on object identity, because every preset build makes fresh
+   *    node ids for the same tree.
+   *
+   *  - A REAL EDIT RETIRES EVERY RESULT ON THE PAGE. A ciphertext is bound to
+   *    the policy it was made under, so an attempt, a collusion walkthrough,
+   *    an escrow or a revocation fixture computed against the previous
+   *    envelope is not merely out of date, it is about a different ciphertext.
+   *    Leaving it on screen next to a new policy is the single most misleading
+   *    thing this page could do.
+   */
   private async setPolicy(next: PolicyNode): Promise<void> {
     try {
       const msp = policyToMsp(next);
+      if (formatPolicy(next) === formatPolicy(this.policy)) return;
       this.policy = next;
       this.msp = msp;
     } catch (e) {
@@ -708,8 +724,32 @@ export class App {
     this.envelope = null;
     this.aesKeyHex = null;
     this.lastAttempt = null;
+    this.retireResults('the policy changed, so every result on this page was computed against a different ciphertext');
     this.renderAll();
     this.markUnsealed();
+  }
+
+  /**
+   * Clear every result that belonged to the previous envelope, and say so.
+   *
+   * Hosts that were already empty stay empty: an untouched exhibit has nothing
+   * to retire, and printing a retirement notice into one would claim a result
+   * had existed.
+   */
+  private retireResults(reason: string): void {
+    for (const name of ['attempt', 'collusion', 'escrow', 'revocation']) {
+      const node = this.hosts[name];
+      if (!node || node.childElementCount === 0) continue;
+      clear(node);
+      node.appendChild(
+        el(
+          'div',
+          { class: 'verdict verdict-warn', attrs: { 'data-retired': 'true' } },
+          el('div', { class: 'verdict-head' }, statusChip('warn', 'Result retired')),
+          el('p', { class: 'verdict-detail', text: `Retired: ${reason}. Run it again.` }),
+        ),
+      );
+    }
   }
 
   /**
@@ -751,6 +791,7 @@ export class App {
   }
 
   private async seal(): Promise<void> {
+    this.retireResults('a new record was sealed, so the previous ciphertext no longer exists');
     this.envelope = await sealUnder(this.lab, this.policy, this.record);
     const { rawKey } = await deriveAesKey(this.envelope.witness.encapsulated);
     this.aesKeyHex = toHex(rawKey);
