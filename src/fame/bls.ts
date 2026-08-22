@@ -6,7 +6,8 @@
  * with no efficient isomorphism between the source groups. BLS12-381 as
  * exposed by @noble/curves is exactly that, which is why FAME transplants onto
  * it without any translation argument. (BSW07, by contrast, assumes a symmetric
- * e : G0 x G0 -> GT and cannot be moved here honestly -- see MATH.md.)
+ * e : G0 x G0 -> GT and cannot be moved here honestly; the page's Construction
+ * disclosure says so, and fame.ts explains why.)
  *
  * Everything below is a thin, typed wrapper. The scheme itself lives in
  * fame.ts and is hand-rolled from the paper's Figure 3.1 so it stays
@@ -171,8 +172,8 @@ export function gtProduct(xs: readonly GTElement[]): GTElement {
  * The tag is not decoration. Revision 1 of this lab's brief specified BSW07
  * over BLS12-381, which is unimplementable precisely because BSW07 needs the
  * same element on both the key and the ciphertext side of a *symmetric*
- * pairing. Making the typing visible everywhere -- in the UI, in the pinned
- * vectors, and in verify.py -- is how that mistake stays caught.
+ * pairing. Making the typing visible everywhere -- in the UI and in the pinned
+ * vectors -- is how that mistake stays caught.
  */
 export type GroupTag = 'G1' | 'G2' | 'GT' | 'Zp';
 
@@ -202,6 +203,34 @@ export function gtToHex(x: GTElement): string {
 
 export function scalarToHex(x: bigint): string {
   return mod(x).toString(16).padStart(64, '0');
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) throw new Error('hexToBytes: odd-length input');
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (Number.isNaN(byte)) throw new Error(`hexToBytes: bad hex at ${i * 2}`);
+    out[i] = byte;
+  }
+  return out;
+}
+
+/** Parse a compressed G1 point. Rejects anything not on the curve or off-subgroup. */
+export function g1FromHex(hex: string): G1Point {
+  if (/^0+$/.test(hex)) return bls.G1.Point.ZERO;
+  return bls.G1.Point.fromHex(hex) as G1Point;
+}
+
+/** Parse a compressed G2 point. */
+export function g2FromHex(hex: string): G2Point {
+  if (/^0+$/.test(hex)) return bls.G2.Point.ZERO;
+  return bls.G2.Point.fromHex(hex) as G2Point;
+}
+
+/** Parse a GT element from its 576-byte encoding. */
+export function gtFromHex(hex: string): GTElement {
+  return Fp12.fromBytes(hexToBytes(hex));
 }
 
 export function tagG1(p: G1Point): TaggedElement {

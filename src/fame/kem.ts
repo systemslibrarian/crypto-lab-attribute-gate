@@ -47,6 +47,30 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 /**
+ * RFC 5869 HKDF-SHA-256, via WebCrypto.
+ *
+ * Exposed on its own so the RFC's published test vectors can be run against
+ * exactly the call this lab makes -- a KAT on a wrapper that nothing else uses
+ * would prove nothing about the pipeline.
+ */
+export async function hkdfSha256(
+  ikm: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array,
+  lengthBytes: number,
+): Promise<Uint8Array> {
+  const base = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, [
+    'deriveBits',
+  ]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: salt as BufferSource, info: info as BufferSource },
+    base,
+    lengthBytes * 8,
+  );
+  return new Uint8Array(bits);
+}
+
+/**
  * HKDF-SHA-256 over the serialized GT element.
  *
  * Extract-then-expand over all 576 bytes of the Fp12 encoding rather than over
@@ -60,25 +84,41 @@ export async function deriveAesKey(shared: GTElement): Promise<{
   ikm: Uint8Array;
 }> {
   const ikm = gtToBytes(shared);
-  const base = await crypto.subtle.importKey('raw', ikm as BufferSource, 'HKDF', false, [
-    'deriveBits',
-  ]);
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: 'HKDF',
-      hash: 'SHA-256',
-      salt: enc.encode(HKDF_SALT) as BufferSource,
-      info: enc.encode(HKDF_INFO) as BufferSource,
-    },
-    base,
-    AES_KEY_BITS,
+  const rawKey = await hkdfSha256(
+    ikm,
+    enc.encode(HKDF_SALT),
+    enc.encode(HKDF_INFO),
+    AES_KEY_BITS / 8,
   );
-  const rawKey = new Uint8Array(bits);
   const key = await crypto.subtle.importKey('raw', rawKey as BufferSource, 'AES-GCM', false, [
     'encrypt',
     'decrypt',
   ]);
   return { key, rawKey, ikm };
+}
+
+/**
+ * AES-256-GCM directly over raw key bytes, for the published test vectors.
+ *
+ * `sealRecord` derives its key and reaches the same WebCrypto call; running
+ * NIST/Wycheproof vectors through this proves the nonce and AAD are wired the
+ * way the standard says, which is the part a lab can get wrong.
+ */
+export async function aesGcmEncrypt(
+  rawKey: Uint8Array,
+  nonce: Uint8Array,
+  aad: Uint8Array,
+  plaintext: Uint8Array,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey('raw', rawKey as BufferSource, 'AES-GCM', false, [
+    'encrypt',
+  ]);
+  const buf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce as BufferSource, additionalData: aad as BufferSource },
+    key,
+    plaintext as BufferSource,
+  );
+  return new Uint8Array(buf);
 }
 
 export interface SealedRecord {

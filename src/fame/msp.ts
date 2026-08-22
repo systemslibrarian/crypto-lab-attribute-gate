@@ -81,7 +81,13 @@ export function policyToMsp(root: PolicyNode): Msp {
     return out;
   };
 
+  // Pre-order, left to right. The traversal order decides which gate gets
+  // which fresh columns, so reading order keeps the matrix legible: the
+  // leftmost gate in the formula owns the leftmost new column.
   const stack: Pending[] = [{ node: root, vector: [1n] }];
+  const pushChildren = (items: Pending[]): void => {
+    for (let i = items.length - 1; i >= 0; i--) stack.push(items[i]);
+  };
   while (stack.length > 0) {
     const { node, vector } = stack.pop() as Pending;
     if (node.kind === 'attribute') {
@@ -95,25 +101,25 @@ export function policyToMsp(root: PolicyNode): Msp {
     if (k === 1) {
       // 1-of-n: q is the constant lambda, so every child gets the same share
       // and no new column is needed.
-      for (const child of gate.children) {
-        stack.push({ node: child, vector: base.slice() });
-      }
+      pushChildren(gate.children.map((child) => ({ node: child, vector: base.slice() })));
       continue;
     }
 
     const newColumns = k - 1;
     for (let c = 0; c < newColumns; c++) columnOwner.push(gate.id);
 
-    gate.children.forEach((child, idx) => {
-      const x = BigInt(idx + 1);
-      const row = base.slice();
-      let power = 1n;
-      for (let c = 0; c < newColumns; c++) {
-        power = mulMod(power, x); // x^1, x^2, ..., x^(k-1)
-        row.push(power);
-      }
-      stack.push({ node: child, vector: row });
-    });
+    pushChildren(
+      gate.children.map((child, idx) => {
+        const x = BigInt(idx + 1);
+        const row = base.slice();
+        let power = 1n;
+        for (let c = 0; c < newColumns; c++) {
+          power = mulMod(power, x); // x^1, x^2, ..., x^(k-1)
+          row.push(power);
+        }
+        return { node: child, vector: row };
+      }),
+    );
     width += newColumns;
   }
 

@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:a11y": "playwright test --project=a11y",
     "test:claims": "playwright test --project=claims",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "vectors:update": "UPDATE_VECTORS=1 vitest run src/fame/vectors.test.ts"
   },
   "dependencies": {
     "@noble/curves": "^2.3.0",

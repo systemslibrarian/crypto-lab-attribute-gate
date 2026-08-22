@@ -41,6 +41,12 @@ import { analyseCollusion, poolKeys } from './collusion';
 
 const rng = seededRandom('crypto-lab-attribute-gate/test');
 
+/** Narrow away `undefined` without weakening the assertion. */
+function must<T>(x: T | undefined, what: string): T {
+  if (x === undefined) throw new Error(`missing ${what}`);
+  return x;
+}
+
 function issue(
   msk: ReturnType<typeof setup>['msk'],
   holder: string,
@@ -183,22 +189,22 @@ describe('KeyGen', () => {
       for (const l of L_INDICES) {
         acc = acc.add(hashAttribute('Doctor:1', l, t).multiply(mod(divMod(witness.Br[l - 1], at))));
       }
-      expect(g1ToHex((key.sk.get('Doctor:1') as never[])[t - 1])).toBe(g1ToHex(acc));
+      expect(g1ToHex(must(key.sk.get('Doctor:1'), 'sk[Doctor:1]')[t - 1])).toBe(g1ToHex(acc));
     }
   });
 
   it('the third component is g^-sigma_y', () => {
     const { key, witness } = keygen(msk, ['Doctor:1'], rng, 'third');
     const sigma = witness.sigma.get('Doctor:1') as bigint;
-    expect(g1ToHex((key.sk.get('Doctor:1') as never[])[2])).toBe(g1ToHex(g1Pow(g1, mod(-sigma))));
+    expect(g1ToHex(must(key.sk.get('Doctor:1'), 'sk[Doctor:1]')[2])).toBe(g1ToHex(g1Pow(g1, mod(-sigma))));
   });
 
   it('two keys for the same attributes get different randomizers', () => {
     const a = keygen(msk, ['Doctor:1'], rng, 'alice');
     const b = keygen(msk, ['Doctor:1'], rng, 'bob');
     expect(a.witness.Br[0]).not.toBe(b.witness.Br[0]);
-    expect(g1ToHex((a.key.sk.get('Doctor:1') as never[])[0])).not.toBe(
-      g1ToHex((b.key.sk.get('Doctor:1') as never[])[0]),
+    expect(g1ToHex(must(a.key.sk.get('Doctor:1'), 'alice sk')[0])).not.toBe(
+      g1ToHex(must(b.key.sk.get('Doctor:1'), 'bob sk')[0]),
     );
   });
 
@@ -281,7 +287,7 @@ describe('end-to-end correctness over the whole policy zoo', () => {
   }
 
   it('a wrong-but-satisfying-looking key never yields the message', () => {
-    const { pk, msk } = setup(seededRandom('e2e:wrongkey'));
+    const { pk } = setup(seededRandom('e2e:wrongkey'));
     const p = or([attr('Doctor'), attr('Nurse')]);
     const msp = policyToMsp(p);
     const { element: message } = randomGT(rng, 'wrongkey');

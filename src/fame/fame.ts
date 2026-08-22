@@ -34,7 +34,8 @@
  * argument for every such element. FAME was designed for Type-3 from the
  * start, so there is nothing to translate. The collusion property this lab is
  * built around -- fresh per-user randomness that does not cancel across keys --
- * is identical in both schemes. See MATH.md.
+ * is identical in both schemes. The page states this in the Construction
+ * disclosure; the derivation of the residual is in predictedResidual below.
  */
 import {
   G1_IDENTITY,
@@ -397,7 +398,7 @@ export function decrypt(ct: Ciphertext, sk: SecretKey): DecryptResult {
 /**
  * The leftover blinding factor, predicted from the r values alone.
  *
- * Working the exponents through (MATH.md has the derivation) gives, for a key
+ * Working the exponents through gives, for a key
  * whose sk0/sk' come from user A and whose component for row i came from
  * user o(i):
  *

@@ -9,13 +9,13 @@
  *    dramatisation.
  *
  *  - `seededRandom(seed)` derives scalars deterministically from a label. It is
- *    used ONLY to pin the known-answer vectors, so `verify.py` can recompute
- *    every group element in a second, independent implementation and compare
- *    byte for byte. It is never used to encrypt anything on the page.
+ *    used ONLY to pin the known-answer vectors, so vectors.test.ts can
+ *    recompute every group element and compare it byte for byte against the
+ *    pinned file. It is never used to encrypt anything on the page.
  *
- * The seeded derivation is defined so it can be reimplemented in ten lines of
- * Python: 64 bytes of SHA-256 output, big-endian, reduced mod p. The reduction
- * bias is below 2^-250 and it is a test fixture, not a key generator.
+ * The seeded derivation is deliberately trivial to restate: 64 bytes of
+ * SHA-256 output, big-endian, reduced mod p. The reduction bias is below
+ * 2^-250, and this is a test fixture, not a key generator.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
 import { mod, ORDER } from './bls';
