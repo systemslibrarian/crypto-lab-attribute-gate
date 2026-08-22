@@ -976,21 +976,59 @@ export class App {
     }
 
     const outcomes = await attemptCollusion(this.lab, this.envelope, ka, kb);
-    const primary = outcomes[0];
-    const other = outcomes[1];
-
     const soloA = await attemptOpen(this.envelope, ka);
     const soloB = await attemptOpen(this.envelope, kb);
+
+    // A collusion scenario is a specific thing: NEITHER holder satisfies the
+    // policy alone, and their union does. If either already qualifies there is
+    // nothing to pool, and if the union still does not qualify the refusal
+    // comes from the policy check rather than from collusion resistance.
+    // Narrating "the blinding does not cancel" over either of those would be
+    // asserting the lesson instead of showing it.
+    const eitherQualifiesAlone = soloA.outcome === 'opened' || soloB.outcome === 'opened';
+    const unionQualifies = outcomes.some((o) => o.analysis.satisfiedPolicy);
+
+    if (eitherQualifiesAlone || !unionQualifies) {
+      this.refresh(
+        'collusion',
+        el(
+          'div',
+          { class: 'verdict verdict-warn', attrs: { 'data-scenario': 'not-collusion' } },
+          el('div', { class: 'verdict-head' }, statusChip('warn', 'Not a collusion scenario')),
+          el('p', {
+            class: 'verdict-detail',
+            text: eitherQualifiesAlone
+              ? `${soloA.outcome === 'opened' ? a : b} already satisfies this policy alone, so pooling adds nothing. Collusion means two holders who each fail and who jointly qualify -- pick a pair like that, or change the policy so neither one qualifies on their own.`
+              : `${a} and ${b} do not satisfy this policy even between them, so the pooled key is refused by the policy check. That is the ordinary ATTR_MISSING path from exhibit 3, not collusion resistance.`,
+          }),
+          el('h4', { text: 'What each key does on its own' }),
+          renderVerdict(soloA),
+          renderVerdict(soloB),
+          el('h4', { text: 'And pooled, in both splice directions' }),
+          ...outcomes.map((o) => renderVerdict(o.attempt)),
+        ),
+      );
+      return;
+    }
+
+    // In a genuine collusion scenario every splice direction is blocked: a
+    // direction that opened would mean the base holder's own rows satisfied
+    // the policy, which the check above has ruled out.
+    const primary = outcomes[0];
+    const other = outcomes[1];
 
     const stages: Stage[] = [
       {
         title: 'Alone, neither can open it',
         body: `${a}: ${soloA.code}. ${b}: ${soloB.code}. Each key satisfies only part of the policy.`,
+        // Both are refusals by construction: the guard above returned early
+        // if either holder qualified alone, and the compiler has narrowed
+        // `outcome` to 'denied' | 'blocked' here to prove it.
         extra: el(
           'div',
           { class: 'stack-row' },
-          statusChip(soloA.outcome === 'opened' ? 'pass' : 'fail', `${a}: ${soloA.headline}`),
-          statusChip(soloB.outcome === 'opened' ? 'pass' : 'fail', `${b}: ${soloB.headline}`),
+          statusChip('fail', `${a}: ${soloA.headline}`),
+          statusChip('fail', `${b}: ${soloB.headline}`),
         ),
       },
       {

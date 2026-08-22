@@ -3,7 +3,7 @@
  * plus every exhibit the page ships, driven without a browser.
  */
 import { describe, expect, it } from 'vitest';
-import { gtEquals, gtToHex } from './bls';
+import { g1, g1Pow, g2, gtEquals, gtToHex, pairing, pairingCount, resetPairingCount } from './bls';
 import {
   DIAGNOSTIC_CODES,
   FAILURE_CODES,
@@ -386,6 +386,56 @@ describe('the one-use transform is enforced on both sides', () => {
     // Only the per-attribute components scale; sk0 and sk' are fixed at 3 each.
     const perAttribute = (r: KeyRecord): number => r.elements - 6;
     expect(perAttribute(three)).toBe(3 * perAttribute(one));
+  });
+});
+
+describe('decryption costs six pairings, whatever the policy looks like', () => {
+  it('is exactly 6 for a small policy and for one twice the size', async () => {
+    const state = lab('pairings');
+    const small = or([and([attr('Doctor'), attr('Cardiology')]), attr('Emergency')]);
+    // 3-of-6 over the same attribute: six rows, three columns, and the
+    // one-use transform pushes Doctor to k = 6 so a holder's key grows too.
+    const wide = threshold(3, Array.from({ length: 6 }, () => attr('Doctor')));
+    observePolicy(state, small);
+    observePolicy(state, wide);
+    issueAll(state);
+
+    const smallEnv = await sealUnder(state, small, RECORD);
+    const wideEnv = await sealUnder(state, wide, RECORD);
+    expect(smallEnv.msp.rows.length).toBe(3);
+    expect(wideEnv.msp.rows.length).toBe(6);
+    // The wide policy also has more COLUMNS, so encryption really did do more
+    // work -- which is the contrast that makes the constant meaningful.
+    expect(wideEnv.msp.columns).toBeGreaterThan(smallEnv.msp.columns);
+
+    const alice = keyOf(state, 'Alice');
+    const a = await attemptOpen(smallEnv, alice);
+    const b = await attemptOpen(wideEnv, alice);
+    expect(a.outcome).toBe('opened');
+    expect(b.outcome).toBe('opened');
+    expect(a.pairings).toBe(6);
+    expect(b.pairings).toBe(6);
+  });
+
+  it('is 0 when the policy check fails, because decryption never runs', async () => {
+    const state = lab('pairings-fail');
+    const policy = and([attr('Doctor'), attr('Cardiology')]);
+    observePolicy(state, policy);
+    issueAll(state);
+    const env = await sealUnder(state, policy, RECORD);
+    const bob = await attemptOpen(env, keyOf(state, 'Bob'));
+    expect(bob.outcome).toBe('denied');
+    expect(bob.pairings).toBe(0);
+  });
+
+  it('the counter counts real pairings only, not the identity short-circuit', () => {
+    resetPairingCount();
+    expect(pairingCount()).toBe(0);
+    pairing(g1, g2);
+    expect(pairingCount()).toBe(1);
+    // An identity input returns 1 without computing anything.
+    pairing(g1Pow(g1, 0n), g2);
+    expect(pairingCount()).toBe(1);
   });
 });
 

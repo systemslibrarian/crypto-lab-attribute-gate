@@ -256,6 +256,38 @@ test.describe('the headline claim, recomputed from what is on screen', () => {
     expect((0 - 1) / (2 - 1)).toBe(-1);
   });
 
+  test('the pairing count the page prints is 6, and does not move with the policy', async ({
+    page,
+  }) => {
+    await boot(page);
+    const counts: number[] = [];
+    const rowCounts: number[] = [];
+    for (const preset of ['headline', 'threshold', 'nested']) {
+      await page.selectOption('#preset', preset);
+      await page.getByRole('button', { name: 'Seal the record under this policy' }).click();
+      await expect(page.locator('[data-host="seal-status"] .verdict-pass')).toBeVisible();
+      await page.getByRole('button', { name: /Try to open the sealed record with Alice/ }).click();
+      const verdict = page.locator('[data-host="attempt"] .verdict');
+      await expect(verdict).toHaveAttribute('data-outcome', 'opened');
+      const line = await verdict.locator('.fact-pairings').innerText();
+      counts.push(Number(/Pairings computed: (\d+)/.exec(line)?.[1]));
+      rowCounts.push(await page.locator('[data-host="matrix"] tbody tr').count());
+    }
+    // The policies really are different sizes...
+    expect(new Set(rowCounts).size).toBeGreaterThan(1);
+    // ...and the pairing count does not move.
+    expect(counts).toEqual([6, 6, 6]);
+  });
+
+  test('a refusal costs zero pairings, because decryption never runs', async ({ page }) => {
+    await boot(page);
+    await page.getByRole('button', { name: /Try to open the sealed record with Dan/ }).click();
+    const verdict = page.locator('[data-host="attempt"] .verdict');
+    await expect(verdict).toHaveAttribute('data-code', 'POLICY_UNSATISFIED');
+    await expect(verdict.locator('.fact-pairings')).toContainText('Pairings computed: 0');
+    await expect(verdict.locator('.fact-pairings')).toContainText('before any were needed');
+  });
+
   test('the sealed byte count is the record the user typed, plus a 16-byte tag', async ({
     page,
   }) => {
@@ -394,23 +426,53 @@ test.describe('every failure path names its actual cause', () => {
     }
     expect(ledger.some((r) => r.outcome === 'survives')).toBe(true);
 
-    // The two routes to the residual must agree, and it must not be 1.
-    await expect(page.locator('[data-host="collusion"]')).toContainText('yes all 576 bytes');
-    await expect(page.locator('[data-host="collusion"]')).toContainText('the record stays shut');
+    // The two routes to the residual must agree, and it must not be 1. The
+    // chip's word and its detail are separate spans, so they are read
+    // separately rather than as one run of text.
+    const agree = page.locator('[data-host="collusion"] .chip', { hasText: 'all 576 bytes' });
+    await expect(agree).toHaveAttribute('data-tone', 'pass');
+    await expect(agree.locator('.chip-label')).toHaveText('yes');
+    const identity = page.locator('[data-host="collusion"] .chip', {
+      hasText: 'the record stays shut',
+    });
+    await expect(identity).toHaveAttribute('data-tone', 'fail');
+    await expect(identity.locator('.chip-label')).toHaveText('no');
   });
 
-  test('a coherent key run through the same machinery leaves a residual of 1', async ({ page }) => {
+  test('a pair that is not a collusion scenario is named as such, not narrated as one', async ({
+    page,
+  }) => {
     await boot(page);
-    // Alice satisfies the policy on her own, so the splice is coherent and the
-    // control case must come out the other way.
+    // Alice satisfies (Doctor AND Cardiology) OR Emergency on her own, so
+    // pooling adds nothing. The exhibit must say that rather than walk through
+    // six stages titled "the blinding does not cancel".
     await page.selectOption('#collude-a', 'Alice');
     await page.selectOption('#collude-b', 'Carol');
     await page.getByRole('button', { name: 'Pool the keys and decrypt' }).click();
-    await expect(page.locator('[data-host="collusion"] [data-stage="6"]')).toBeVisible();
-    await expect(page.locator('[data-host="collusion"]')).toContainText('decryption is correct');
-    const verdicts = page.locator('[data-host="collusion"] .verdict[data-outcome="opened"]');
-    await expect(verdicts).toHaveCount(2);
-    await expect(page.locator('[data-host="collusion"] .ledger td.survives')).toHaveCount(0);
+    const panel = page.locator('[data-host="collusion"] [data-scenario="not-collusion"]');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('already satisfies this policy alone');
+    // No six-stage walkthrough, and no ledger claiming a cancellation failure.
+    await expect(page.locator('[data-host="collusion"] [data-stage]')).toHaveCount(0);
+    await expect(page.locator('[data-host="collusion"] .ledger')).toHaveCount(0);
+    // The real outcomes are still shown, both solo and pooled.
+    await expect(panel.locator('.verdict[data-outcome="opened"]')).not.toHaveCount(0);
+  });
+
+  test('a pair whose union still fails is refused by the policy check, not by collusion', async ({
+    page,
+  }) => {
+    await boot(page);
+    // Dan holds Nurse and Bob holds Doctor; together they still do not satisfy
+    // (Doctor AND Cardiology) OR Emergency.
+    await page.selectOption('#collude-a', 'Bob');
+    await page.selectOption('#collude-b', 'Dan');
+    await page.getByRole('button', { name: 'Pool the keys and decrypt' }).click();
+    const panel = page.locator('[data-host="collusion"] [data-scenario="not-collusion"]');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('not collusion resistance');
+    await expect(panel.locator('.verdict[data-code="POLICY_UNSATISFIED"]')).not.toHaveCount(0);
+    await expect(page.locator('[data-host="collusion"] [data-stage]')).toHaveCount(0);
   });
 });
 

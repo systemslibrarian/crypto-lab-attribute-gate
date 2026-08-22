@@ -9,7 +9,14 @@
  *
  * All key material is per-session and in memory. Nothing is persisted.
  */
-import { GT_ONE, gtEquals, gtToHex, type GTElement } from './bls';
+import {
+  GT_ONE,
+  gtEquals,
+  gtToHex,
+  pairingCount,
+  resetPairingCount,
+  type GTElement,
+} from './bls';
 import { FAILURE_CODES, SUCCESS_CODE, type FailureCodeId } from './codes';
 import {
   analyseCollusion,
@@ -92,6 +99,14 @@ export interface Attempt {
   /** The AEAD's answer, which is what actually gates the record. */
   readonly aeadAccepted: boolean;
   readonly plaintext: string | null;
+  /**
+   * Pairings this attempt actually computed.
+   *
+   * Six when decryption runs, whatever the policy looks like -- that constant
+   * is FAME's headline result, and counting is how the page shows it instead
+   * of quoting a millisecond figure that describes the reader's laptop.
+   */
+  readonly pairings: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -241,7 +256,9 @@ async function runAttempt(
   key: SecretKey,
   pooled: boolean,
 ): Promise<Attempt> {
+  resetPairingCount();
   const result = decrypt(envelope.ciphertext, key);
+  const pairings = pairingCount();
 
   if (!result.ok) {
     const code: FailureCodeId = 'POLICY_UNSATISFIED';
@@ -257,6 +274,7 @@ async function runAttempt(
       recoveredMatches: false,
       aeadAccepted: false,
       plaintext: null,
+      pairings,
     };
   }
 
@@ -277,6 +295,7 @@ async function runAttempt(
       recoveredMatches: matches,
       aeadAccepted: true,
       plaintext: opened.plaintext,
+      pairings,
     };
   }
 
@@ -298,6 +317,7 @@ async function runAttempt(
     recoveredMatches: matches,
     aeadAccepted: false,
     plaintext: null,
+    pairings,
   };
 }
 

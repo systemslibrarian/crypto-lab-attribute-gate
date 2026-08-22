@@ -149,7 +149,7 @@ npx playwright install chromium   # once, before either browser suite
 
 ## Build & Verify
 
-**133 tests pass** across five Vitest files, plus two Playwright suites.
+**136 tests pass** across five Vitest files, plus two Playwright suites.
 
 | Suite | What it covers |
 |---|---|
@@ -181,17 +181,21 @@ Second, it **pins its own**, in `vectors/fame-vectors.json`: a complete run — 
 
 ## Performance
 
-All figures from Chromium on an M-series laptop; the browser is doing real BLS12-381 arithmetic.
+Wall-clock figures from a browser say more about the reader's machine than about the scheme, so what this lab quotes — and what it prints on screen — are **counts**, which are exact and load-invariant.
 
 | Operation | Cost |
 |---|---|
-| Setup | ~30 ms (one pairing, four exponentiations) |
-| KeyGen, one attribute | ~25 ms (6 hash-to-curve, 8 G1 exponentiations) |
-| Encrypt, 3-row / 2-column MSP | ~120 ms |
-| Decrypt | 6 pairings, independent of policy size |
-| Page load to first sealed record | ~1 s (Setup + 5 KeyGens + Encrypt) |
+| Setup | 1 pairing, 5 exponentiations |
+| KeyGen for an attribute set `S` | `6(\|S\|+1)` hash-to-curve queries, `8(\|S\|+1)` G1 exponentiations, 3 in G2 |
+| Key size | `3 + 3\|S\| + 3` group elements (`sk0` in G2, one triple per attribute in G1, `sk'` in G1) |
+| Encrypt over an `n1 × n2` MSP | `6n1(n2+1)` hash-to-curve queries, `6n1(n2+1)` G1 exponentiations, 3 in G2, 2 in GT |
+| **Decrypt** | **6 pairings, whatever the policy is**, plus one G1 exponentiation per used row |
 
-Decryption is six pairings regardless of how large the policy is — that constant is one of FAME's headline results. What grows with the policy is the number of exponentiations in `G1`, which is the cheap group.
+The last line is FAME's headline result, and it is the reason the scheme exists: earlier fully secure CP-ABE constructions paid a pairing per attribute. Here decryption is six pairings for a two-row policy and six for a sixty-row one; everything that grows with the policy is exponentiation in `G1`, the cheap group.
+
+That constant is **shown, not asserted**. Every verdict on the page prints the number of pairings the attempt actually computed, counted at the primitive; `src/fame/system.test.ts` asserts it is exactly 6 for policies of different sizes, and 0 when the policy check fails before decryption runs. The one-use transform's cost is displayed the same way — the key-size column in exhibit 2 is a count, not a claim.
+
+For orientation only, and not a benchmark: on an unloaded M-series laptop the page completes Setup, five KeyGens and an Encrypt in roughly a second, which is what the initial seal costs before anything is clickable.
 
 ---
 

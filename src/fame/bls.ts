@@ -168,9 +168,31 @@ export function g1Product(xs: readonly G1Point[]): G1Point {
 
 export const GT_ONE: GTElement = Fp12.ONE;
 
+/**
+ * Pairings actually computed since the last reset.
+ *
+ * FAME's headline efficiency result is that DECRYPTION COSTS SIX PAIRINGS
+ * regardless of how large the policy is -- everything that grows with the
+ * policy is exponentiation in G1, the cheap group. That is a claim worth
+ * showing rather than asserting, and a wall-clock number cannot show it,
+ * because a browser's timings say more about the machine than the scheme.
+ * A count is exact and load-invariant, so the page prints one.
+ */
+let pairingCounter = 0;
+
+export function resetPairingCount(): void {
+  pairingCounter = 0;
+}
+
+export function pairingCount(): number {
+  return pairingCounter;
+}
+
 export function pairing(a: G1Point, b: G2Point): GTElement {
-  // The identity in either source group pairs to 1; noble rejects it as input.
+  // The identity in either source group pairs to 1; noble rejects it as input,
+  // and no pairing is computed, so none is counted.
   if (a.is0() || b.is0()) return Fp12.ONE;
+  pairingCounter += 1;
   return bls.pairing(a, b);
 }
 

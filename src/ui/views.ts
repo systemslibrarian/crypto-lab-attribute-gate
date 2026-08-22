@@ -459,6 +459,15 @@ export function renderVerdict(attempt: Attempt): HTMLElement {
   facts.appendChild(
     el('li', { text: `AES-GCM verified the tag: ${attempt.aeadAccepted ? 'yes' : 'no'}` }),
   );
+  facts.appendChild(
+    el('li', {
+      class: 'fact-pairings',
+      text:
+        attempt.pairings === 0
+          ? 'Pairings computed: 0 — the policy check failed before any were needed'
+          : `Pairings computed: ${attempt.pairings} — and it is six for every policy, however large`,
+    }),
+  );
   box.appendChild(facts);
 
   if (attempt.plaintext !== null) {
