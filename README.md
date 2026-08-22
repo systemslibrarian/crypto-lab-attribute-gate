@@ -149,7 +149,7 @@ npx playwright install chromium   # once, before either browser suite
 
 ## Build & Verify
 
-**136 tests pass** across five Vitest files, plus two Playwright suites.
+**136 unit tests pass** across five Vitest files, plus **23 claims tests** and the accessibility gate at two viewport widths.
 
 | Suite | What it covers |
 |---|---|

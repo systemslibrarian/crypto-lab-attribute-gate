@@ -262,8 +262,15 @@ test.describe('the headline claim, recomputed from what is on screen', () => {
     await boot(page);
     const counts: number[] = [];
     const rowCounts: number[] = [];
-    for (const preset of ['headline', 'threshold', 'nested']) {
+    // Alice holds Doctor and Cardiology, and these are the three presets she
+    // satisfies. The re-issue is not incidental: the reuse preset raises k for
+    // Doctor, so a key minted under the old k is genuinely stale and would be
+    // refused -- which is exhibit 2's point, and would make this test measure
+    // that instead of the pairing count.
+    for (const preset of ['headline', 'reuse', 'threshold']) {
       await page.selectOption('#preset', preset);
+      await page.getByRole('button', { name: 'Re-issue every key' }).click();
+      await expect(page.locator('.person .chip-warn')).toHaveCount(0);
       await page.getByRole('button', { name: 'Seal the record under this policy' }).click();
       await expect(page.locator('[data-host="seal-status"] .verdict-pass')).toBeVisible();
       await page.getByRole('button', { name: /Try to open the sealed record with Alice/ }).click();

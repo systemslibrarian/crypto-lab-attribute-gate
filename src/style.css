@@ -166,6 +166,13 @@ body {
   .cl-hero {
     flex-direction: column;
   }
+  /* Once the hero stacks, `flex-basis` measures the CROSS axis no longer --
+     it measures height. The standard `flex: 1 1 22rem` on the title block
+     therefore reserves 352px of empty space above the why-box. Sizing to
+     content is the fix; the desktop basis is untouched. */
+  .cl-hero-main {
+    flex: 0 0 auto;
+  }
   .cl-hero-why {
     flex-basis: auto;
     width: 100%;
