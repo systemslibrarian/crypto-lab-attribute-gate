@@ -402,7 +402,13 @@ body {
   padding: 0.16rem 0.5rem;
   border-radius: 999px;
   border: 1px solid currentColor;
-  white-space: nowrap;
+  /* Not `nowrap`. A status chip carries `ATTR_MISSING` plus the attribute the
+     learner typed into the policy, so its content length is unbounded and a
+     pill that can never break walks off the side of the page. It still sits on
+     one line wherever there is room; this only decides what happens when there
+     is not. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .chip-icon {
@@ -608,6 +614,11 @@ tr.row-missing td {
   border-radius: var(--radius-sm);
   background: var(--panel-2);
   padding: 0.3rem 0.55rem;
+  /* An inline-flex box takes its content's width and ignores the shrinking
+     `.tree ul` around it, so a deep unsatisfied node plus 1.1rem of indent per
+     level walked off the side of the page. The wrap above only helps once the
+     box is told it may not exceed its row. */
+  max-width: 100%;
 }
 
 .node-gate {
