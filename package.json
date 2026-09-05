@@ -16,13 +16,13 @@
     "vectors:update": "UPDATE_VECTORS=1 vitest run src/fame/vectors.test.ts"
   },
   "dependencies": {
-    "@noble/curves": "^2.3.0",
+    "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.0.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
-    "@types/node": "^26.3.0",
+    "@types/node": "^26.4.1",
     "typescript": "~7.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
