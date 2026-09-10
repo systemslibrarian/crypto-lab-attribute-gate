@@ -101,6 +101,11 @@ jobs:
         # Retry: a sibling pull request merging first moves main underneath us
         # and GitHub rejects with "Base branch was modified". That is benign, so
         # try again rather than failing the run over a race.
+        #
+        # `merged=1` is load bearing: it is set only in the branch the `gh pr
+        # merge` command's own exit status selects, and the Deploy step below
+        # guards on it as `env.merged`. Nothing downstream re-asks the API
+        # whether the merge landed, so do not "simplify" this echo away.
         run: |
           for attempt in 1 2 3; do
             if gh pr merge --squash --delete-branch "$PR_URL"; then
@@ -121,13 +126,28 @@ jobs:
       # explicitly; a workflow_dispatch through the API is not suppressed. The
       # dispatched run is the same gate-then-deploy pipeline, so a bad merge
       # still ships nothing.
+      #
+      # The guard is `env.merged` -- the flag the step above writes to
+      # $GITHUB_ENV from the exit status of the `gh pr merge` that actually did
+      # the merging. $GITHUB_ENV is the right mechanism here and only here: a
+      # value written to it is visible to LATER steps, never the current one,
+      # and the merge is the prior step.
+      #
+      # What is deliberately NOT here is a second API query asking whether the
+      # pull request we just merged reached the MERGED state. That question can
+      # fail -- rate limit, transient 5xx, a token that lost scope, a PR object
+      # not yet consistent -- and when it does the pipeline emits nothing,
+      # `grep -q` matches nothing, the `if` takes the else branch, and the step
+      # exits 0 having dispatched nothing and printed nothing. Not even a
+      # warning, because the `|| echo` guarded a `gh workflow run` that was
+      # never reached. The merge's own exit status cannot fail to be observed,
+      # so it is what decides.
+      #
+      # `shell: bash` does not fix that shape: inside an `if` condition a failing
+      # pipeline takes the else branch with or without pipefail, and `set -e` is
+      # exempt in that position.
       - name: Deploy the merged result
-        if: success()
-        run: |
-          if gh pr view "$PR_URL" --json state --jq .state | grep -q MERGED; then
-            gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main \
-              || echo "::warning::deploy dispatch failed; run deploy.yml by hand"
-          fi
+        if: success() && env.merged == '1'
+        run: gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
