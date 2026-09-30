@@ -18,3 +18,4 @@ brief.md
 # Python venv for the independent verifier.
 verification/.venv/
 __pycache__/
+chat.md
