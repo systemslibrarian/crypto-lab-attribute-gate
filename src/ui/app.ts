@@ -2,9 +2,10 @@
  * The page.
  *
  * One live lab -- one authority, one staff list, one attribute registry, one
- * sealed envelope -- driven by the original FAME exhibits plus an independent
- * FABESA lesson. Everything the page prints comes from the real schemes in
- * src/fame and src/fabesa; nothing is staged.
+ * sealed envelope -- driven by the original FAME exhibits plus independent
+ * FABESA and RW15 lessons and a separately scoped epoch-rewrap adaptation.
+ * Every cryptographic outcome the page prints comes from the executable
+ * constructions; nothing is staged.
  */
 import { gtToHex, ORDER } from '../fame/bls';
 import { FAILURE_CODES, FAILURE_CODE_IDS } from '../fame/codes';
@@ -70,6 +71,8 @@ import {
   type Stage,
 } from './views';
 import { createFabesaLesson } from './fabesa';
+import { createEpochRevocationLesson } from './revocation';
+import { createRw15Lesson } from './rw15';
 
 const DEFAULT_RECORD =
   'PATIENT 00-4417 · Ward 3B · Troponin I 0.42 ng/mL · ECG: ST elevation, leads V2-V4';
@@ -109,12 +112,18 @@ export class App {
     this.root.appendChild(this.honestyPanel());
     this.root.appendChild(this.codesPanel());
     const fabesa = createFabesaLesson();
+    const rw15 = createRw15Lesson();
+    const epochRevocation = createEpochRevocationLesson();
     this.root.appendChild(fabesa.element);
-    // Keep the two schemes sequential while their shared pairing counter is
-    // instrumented. data-app-ready is set only after both initial states are
-    // real and learner-visible.
+    this.root.appendChild(rw15.element);
+    this.root.appendChild(epochRevocation.element);
+    // Keep the pairing-backed lessons sequential while their shared pairing
+    // counter is instrumented. data-app-ready is set only after every initial
+    // state is real and learner-visible.
     await this.seal();
     await fabesa.initialize();
+    await rw15.initialize();
+    await epochRevocation.initialize();
   }
 
   private host(name: string, cls = ''): HTMLElement {
@@ -170,7 +179,7 @@ export class App {
         {},
         'The first eight exhibits use ',
         el('strong', { text: 'FAME' }),
-        ' (Agrawal and Chase, ACM CCS 2017), running over BLS12-381 pairings in your browser. Exhibit 9 is a separate bounded lesson using FABESA CP-A2BE (Meng et al., ACM CCS 2024) to hide attribute values while keeping names, structure, dimensions and lengths public. Both are teaching demos, not production cryptography: each scoping panel says exactly what it does and does not show.',
+        ' (Agrawal and Chase, ACM CCS 2017), running over BLS12-381 pairings in your browser. Exhibit 9 separately uses FABESA CP-A2BE (Meng et al., ACM CCS 2024) to hide attribute values while keeping names, structure, dimensions and lengths public. Exhibit 10 uses Rouselakis-Waters 2015 to combine independently issued attributes only when they share one canonical GID. Exhibit 11 is a bounded FAME epoch-gating and owner-assisted DEK-rewrap adaptation—not RW15 and not a revocable-ABE theorem. Every scoping panel says exactly what its lesson does and does not establish.',
       ),
     );
   }
@@ -633,7 +642,7 @@ export class App {
     const table = el('table');
     table.appendChild(
       el('caption', {
-        text: 'Every outcome this lab can report. "internal" means an invariant that must never reach you as a verdict.',
+        text: 'Outcome identifiers for the original FAME workflow. "internal" means an invariant that must never reach you as a verdict.',
       }),
     );
     table.appendChild(
@@ -676,7 +685,7 @@ export class App {
         number: '08',
         title: 'Failure codes',
         lede:
-          'Every verdict on this page prints one of these identifiers verbatim, so a refusal always names its cause.',
+          'The FAME exhibits print these identifiers verbatim so each refusal names a specific cause. Later construction-specific lessons define their own codes beside their results.',
       },
       scroller('Failure code reference', table),
     );

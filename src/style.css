@@ -452,6 +452,12 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 0.08rem 0.4rem;
+  /* Construction-specific identifiers can be longer than the usable width
+     of a verdict at 280px. Let the tag itself shrink and wrap instead of
+     forcing the document wider than the viewport. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* ---------------------------------------------------------- disclosure -- */

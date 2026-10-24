@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Browser demos of FAME public-policy CP-ABE and bounded FABESA hidden-value CP-A2BE over BLS12-381.",
+  "description": "Browser lessons for FAME, FABESA, RW15 multi-authority ABE, and bounded epoch rewrap over BLS12-381.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

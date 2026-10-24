@@ -37,13 +37,14 @@ export const REFLOW = { width: 280, height: 800 };
  *
  *  2. NOTHING IS REVEALED FROM SCRIPT. The old drive stripped every `[hidden]`
  *     and set every `<details>.open` by JS before its only scan. This page has
- *     eight `<details class="disclose">` blocks -- the KEM boundary, the
+ *     eleven `<details class="disclose">` blocks -- the KEM boundary, the
  *     BSW07-versus-FAME argument, the paper's one-use wording, the matrix
  *     construction, what a key is, the residual derivation, what real
- *     revocation would cost, and FABESA's encryptor-only ground truth -- and
- *     every one of them SHIPS SHUT. The state a
- *     reader arrives at is scanned first, and each disclosure is then opened
- *     by clicking its `<summary>`, which is the route a reader has.
+ *     revocation would cost, FABESA's encryptor-only ground truth, RW15's
+ *     repeated rows and proof scope, and the epoch-adaptation boundary -- and
+ *     every one of them SHIPS SHUT. The arrival state is scanned first, and
+ *     each disclosure is then opened by clicking its `<summary>`, which is
+ *     the route a reader has.
  *
  *  3. THE DRIVE NAMES WHAT IT TOUCHES AND WAITS ON REAL SIGNALS. No fixed
  *     timeouts, no `.catch(() => {})`. Every step waits on a DOM completion
@@ -262,7 +263,7 @@ export async function boot(page: Page): Promise<void> {
   ).toHaveCount(0);
 
   // ── The arrival state ───────────────────────────────────────────────────
-  await expect(page.locator('section.panel')).toHaveCount(9);
+  await expect(page.locator('section.panel')).toHaveCount(11);
   await expect(page.locator('#preset')).toHaveValue('headline');
   await expect(page.locator('[data-host="formula"] code')).toHaveText(
     '((Doctor AND Cardiology) OR Emergency)',
@@ -294,8 +295,23 @@ export async function boot(page: Page): Promise<void> {
   await expect(page.locator('[data-host="fabesa-attempt"]')).toBeEmpty();
   await expect(page.locator('[data-host="fabesa-cap"]')).toBeEmpty();
 
+  // RW15 has completed two independent setups and ciphertexts, but none of
+  // its three executable comparisons has been requested yet.
+  await expect(page.locator('#rw15')).toHaveAttribute('data-rw15-ready', 'true');
+  await expect(page.locator('[data-host="rw15-setup"] [data-code="RW15_READY"]')).toBeVisible();
+  await expect(page.locator('[data-host="rw15-same-gid"]')).toBeEmpty();
+  await expect(page.locator('[data-host="rw15-cross-gid"]')).toBeEmpty();
+  await expect(page.locator('[data-host="rw15-compromise"]')).toBeEmpty();
+
+  // The bounded epoch lesson has no staged lifecycle result on arrival.
+  await expect(page.locator('#epoch-revocation')).toHaveAttribute(
+    'data-revocation-ready',
+    'true',
+  );
+  await expect(page.locator('[data-host="epoch-revocation-result"]')).toBeEmpty();
+
   // ── Every disclosure ships shut ─────────────────────────────────────────
-  await expect(page.locator('details.disclose')).toHaveCount(8);
+  await expect(page.locator('details.disclose')).toHaveCount(11);
   await expect(page.locator('details.disclose[open]')).toHaveCount(0);
 
   await settle(page);
@@ -479,7 +495,7 @@ async function soft(fn: () => Promise<void>): Promise<void> {
  * text node. This page has two generated marks that matter -- the
  * `.select-wrap::after` chevron on every styled `<select>`, which is the ONLY
  * affordance saying a select is a select once `appearance: none` removes the
- * native one, and the `.disclose-summary::before` triangle on all eight
+ * native one, and the `.disclose-summary::before` triangle on all eleven
  * disclosures.
  *
  * IT IS CALLED FROM `scan()`, deliberately. Fleet-wide this oracle had been
@@ -640,7 +656,7 @@ async function waitSealed(page: Page): Promise<void> {
  * Shaping this drive:
  *
  *  - THE ARRIVAL STATE IS SCANNED FIRST, as a reader gets it: headline policy,
- *    record already sealed, nothing attempted, all eight disclosures shut.
+ *    record already sealed, nothing attempted, all eleven disclosures shut.
  *
  *  - EVERY VERDICT TONE IS REACHED. The page has three -- opened (pass),
  *    denied (fail) and blocked (warn) -- plus MALFORMED_POLICY, and each one
@@ -691,12 +707,14 @@ export async function driveAllStates(page: Page, prefix: string): Promise<void> 
   // ── Every disclosure, opened through its summary ────────────────────────
   const summaries = page.locator('details.disclose > summary');
   const count = await summaries.count();
-  expect(count, 'eight disclosures ship on this page').toBe(8);
+  expect(count, 'eleven disclosures ship on this page').toBe(11);
   for (let i = 0; i < count; i++) {
     await summaries.nth(i).click();
     await expect(page.locator('details.disclose[open]')).toHaveCount(i + 1);
   }
-  await scanAt('all eight disclosures open — formulas, paper quotes, derivation and FABESA ground truth');
+  await scanAt(
+    'all eleven disclosures open — formulas, proof scopes, repeated rows, epoch limits and FABESA ground truth',
+  );
   for (let i = 0; i < count; i++) await summaries.nth(i).click();
   await expect(page.locator('details.disclose[open]')).toHaveCount(0);
 
@@ -866,6 +884,52 @@ export async function driveAllStates(page: Page, prefix: string): Promise<void> 
     'CANDIDATE_LIMIT_EXCEEDED',
   );
   await scanAt('FABESA — candidate cap refuses before pairing or tag trials');
+
+  // ── RW15 decentralized multi-authority paths ────────────────────────────
+  await page.locator('#rw15-run-same-gid').click();
+  await expect(
+    page.locator('[data-host="rw15-same-gid"] [data-rw15-case="same-gid"]'),
+  ).toHaveAttribute('data-aead-accepted', 'true');
+  await scanAt('RW15 — same canonical GID combines two independent issuers and opens');
+
+  await page.locator('#rw15-run-cross-gid').click();
+  const crossGid = page.locator(
+    '[data-host="rw15-cross-gid"] [data-rw15-case="cross-gid"]',
+  );
+  await expect(crossGid).toHaveAttribute('data-policy-satisfied', 'true');
+  await expect(crossGid).toHaveAttribute('data-recovered-matches', 'false');
+  await expect(crossGid).toHaveAttribute('data-aead-accepted', 'false');
+  await scanAt('RW15 — raw cross-GID rows satisfy structurally, but the wrong GT key rejects');
+
+  await page.locator('#rw15-run-compromise').click();
+  const compromise = page.locator(
+    '[data-host="rw15-compromise"] [data-rw15-case="compromise"]',
+  );
+  await expect(compromise).toHaveAttribute('data-own-policy-opened', 'true');
+  await expect(compromise).toHaveAttribute('data-cross-policy-opened', 'false');
+  await expect(compromise).toHaveAttribute('data-board-still-required', 'true');
+  await scanAt('RW15 — compromised Hospital breaks its policy while Board stays independent');
+
+  // ── Bounded epoch lifecycle ──────────────────────────────────────────────
+  await page.locator('#epoch-revocation-run').click();
+  const epochResults = page.locator('[data-host="epoch-revocation-result"]');
+  await expect(epochResults.locator('[data-revocation-case="bob-old"]')).toHaveAttribute(
+    'data-opened',
+    'true',
+  );
+  await expect(epochResults.locator('[data-revocation-case="bob-current"]')).toHaveAttribute(
+    'data-opened',
+    'false',
+  );
+  await expect(
+    epochResults.locator('[data-revocation-case="rollback-with-checkpoint"]'),
+  ).toHaveAttribute('data-code', 'ROLLBACK_DETECTED');
+  await expect(epochResults.locator('[data-revocation-case="payload-header"]')).toHaveAttribute(
+    'data-payload-bytes-rewritten',
+    '0',
+  );
+  await expect(epochResults.locator('[data-revocation-case="cost-ledger"]')).toBeVisible();
+  await scanAt('epoch adaptation — current, retained, rollback, rewrap, escrow and cost results');
 
   // ── Hover, which persists after a click ─────────────────────────────────
   await page.getByRole('button', { name: 'Seal the record under this policy' }).hover();
