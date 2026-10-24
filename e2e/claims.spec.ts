@@ -918,7 +918,11 @@ test.describe('bounded epoch-gating and owner-assisted rewrap claims', () => {
     await expect(aliceCurrent).toHaveAttribute('data-code', 'OPENED');
     await expect(aliceCurrent).toHaveAttribute('data-epoch', '2');
     await expect(aliceCurrent).toHaveAttribute('data-opened', 'true');
-    await expect(aliceCurrent).toContainText('Doctor, Access epoch 2');
+    const currentLabels = aliceCurrent
+      .locator('.honesty-list li')
+      .filter({ hasText: 'New labels:' })
+      .locator('code');
+    await expect(currentLabels).toHaveText('Doctor:1, Access epoch 2:1');
     await expect(aliceCurrent).toContainText('not an independently updateable epoch component');
 
     const noCheckpoint = result.locator('[data-revocation-case="rollback-no-checkpoint"]');
