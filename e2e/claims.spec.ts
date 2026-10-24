@@ -725,6 +725,327 @@ test.describe('FABESA partially hidden-policy claims', () => {
   });
 });
 
+test.describe('RW15 decentralized multi-authority claims', () => {
+  test('same-GID keys open, while the strongest raw cross-GID pool fails cryptographically', async ({
+    page,
+  }) => {
+    await boot(page);
+    const lesson = page.locator('#rw15');
+    await expect(lesson).toHaveAttribute('data-rw15-ready', 'true');
+
+    // Two independently generated public keys are learner-visible before any
+    // decryption path runs. This cross-checks the setup verdict against the
+    // authority cards instead of trusting a hardcoded caption.
+    const setup = page.locator('[data-host="rw15-setup"] [data-rw15-authorities="2"]');
+    await expect(setup).toBeVisible();
+    const authorities = await setup.locator('[data-rw15-authority]').evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('data-rw15-authority')),
+    );
+    expect(authorities).toEqual(['Hospital', 'Board']);
+    const authorityFingerprints = await setup
+      .locator('[data-rw15-authority] .verdict-plain code')
+      .allInnerTexts();
+    expect(authorityFingerprints).toHaveLength(2);
+    expect(authorityFingerprints[0]).not.toBe(authorityFingerprints[1]);
+
+    await page.locator('#rw15-run-same-gid').click();
+    const same = page.locator('[data-host="rw15-same-gid"] [data-rw15-case="same-gid"]');
+    await expect(same).toHaveAttribute('data-code', 'RW15_SAME_GID_OPENED');
+    await expect(same).toHaveAttribute('data-policy-satisfied', 'true');
+    await expect(same).toHaveAttribute('data-recovered-matches', 'true');
+    await expect(same).toHaveAttribute('data-aead-accepted', 'true');
+    await expect(same).toContainText('Exact canonical GID: gid:alice');
+    await expect(same).toContainText('Selected rows: 1, 2');
+    await expect(same).toContainText(
+      'Authenticated plaintext: CASE-0317: independently authorized cardiology record',
+    );
+
+    const sameFacts = same.locator('.honesty-list li');
+    const samePairingText = await sameFacts.nth(2).innerText();
+    const samePairing = /(\d+) selected rows? × 3 pairing terms; (\d+) actual/.exec(
+      samePairingText,
+    );
+    expect(samePairing).not.toBeNull();
+    expect(Number(samePairing?.[2])).toBe(Number(samePairing?.[1]) * 3);
+    expect(await sameFacts.nth(3).locator('code').innerText()).toBe(
+      await sameFacts.nth(4).locator('code').innerText(),
+    );
+
+    await page.locator('#rw15-run-cross-gid').click();
+    const cross = page.locator('[data-host="rw15-cross-gid"] [data-rw15-case="cross-gid"]');
+    await expect(cross).toHaveAttribute('data-code', 'RW15_CROSS_GID_TAG_REJECTED');
+    // This is deliberately the stronger raw-combination experiment: the
+    // labels reach both rows, but distinct H(GID) bases leave the wrong GT
+    // element and the authenticated wrapper rejects it. An early metadata
+    // mismatch would make these assertions fail.
+    await expect(cross).toHaveAttribute('data-policy-satisfied', 'true');
+    await expect(cross).toHaveAttribute('data-recovered-matches', 'false');
+    await expect(cross).toHaveAttribute('data-aead-accepted', 'false');
+    await expect(cross).toContainText('Structural reconstruction: satisfied');
+    await expect(cross).toContainText(
+      'The API did not reject a GID mismatch before doing the algebra',
+    );
+    await expect(cross).toContainText('Doctor@Hospital / gid:bob');
+    await expect(cross).toContainText('Cardiology@Board / gid:eve');
+
+    const crossFacts = cross.locator('.honesty-list li');
+    const crossPairingText = await crossFacts.nth(2).innerText();
+    const crossPairing = /(\d+) selected rows? × 3 pairing terms; (\d+) actual/.exec(
+      crossPairingText,
+    );
+    expect(crossPairing).not.toBeNull();
+    expect(Number(crossPairing?.[2])).toBe(Number(crossPairing?.[1]) * 3);
+    expect(await crossFacts.nth(3).locator('code').innerText()).not.toBe(
+      await crossFacts.nth(4).locator('code').innerText(),
+    );
+  });
+
+  test('one compromised issuer breaks only its own boundary, and Board remains required', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.locator('#rw15-run-compromise').click();
+
+    const result = page.locator(
+      '[data-host="rw15-compromise"] [data-rw15-case="compromise"]',
+    );
+    await expect(result).toHaveAttribute('data-code', 'RW15_ONE_AUTHORITY_COMPROMISED');
+    await expect(result).toHaveAttribute('data-own-policy-opened', 'true');
+    await expect(result).toHaveAttribute('data-cross-policy-opened', 'false');
+    await expect(result).toHaveAttribute('data-board-still-required', 'true');
+    await expect(
+      result.locator('[data-compromise-policy="authority-a-only"]'),
+    ).toHaveAttribute('data-opened', 'true');
+    await expect(result.locator('[data-compromise-policy="cross-authority"]')).toHaveAttribute(
+      'data-opened',
+      'false',
+    );
+    await expect(result).toContainText('Doctor@Hospital / gid:mallory');
+    await expect(result).toContainText('Hospital-only policy: opened by compromised issuer');
+    await expect(result).toContainText('Hospital AND Board policy: Board still required');
+    await expect(result).toContainText('1 selected row × 3 pairing terms; 3 actual');
+  });
+
+  test('the RW15 compiler preserves repeated logical attributes and states the proof boundary', async ({
+    page,
+  }) => {
+    await boot(page);
+
+    const repeated = page.locator('#rw15 details[data-rw15-repeat-satisfied="true"]');
+    await expect(repeated).toHaveAttribute('data-rw15-repeat-used-rows', '1,3');
+    await repeated.locator('summary').click();
+    const rows = await repeated.locator('tbody tr').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        row: (node.querySelector('th')?.textContent ?? '').trim(),
+        attribute: (node.querySelector('td code')?.textContent ?? '').trim(),
+        selected: node.getAttribute('data-selected'),
+      })),
+    );
+    expect(rows).toEqual([
+      { row: '1', attribute: 'STUDENT@UT', selected: 'true' },
+      { row: '2', attribute: 'PROFESSOR@OU', selected: 'false' },
+      { row: '3', attribute: 'STUDENT@UT', selected: 'true' },
+      { row: '4', attribute: 'MASTERS@OU', selected: 'false' },
+    ]);
+    expect(rows.filter((row) => row.attribute === 'STUDENT@UT')).toHaveLength(2);
+    expect(rows.some((row) => /:\d+$/.test(row.attribute))).toBe(false);
+    await expect(repeated).toContainText('one STUDENT@UT key reconstructs with rows 1, 3');
+
+    const scope = page.locator('#rw15 details[data-rw15-claim-scope="static-rom-q-dpbdhe2"]');
+    await scope.locator('summary').click();
+    await expect(scope).toContainText(
+      'static (non-adaptive) security in the random-oracle model under q-DPBDHE2',
+    );
+    await expect(scope).toContainText('challenge matrix of at most q × q');
+    await expect(scope.locator('[data-rw15-assumption="authority-directory"]')).toContainText(
+      'authenticated directory',
+    );
+    await expect(scope.locator('[data-rw15-assumption="gid-proofing"]')).toContainText(
+      'same byte-exact canonical GID',
+    );
+    await expect(scope.locator('[data-rw15-nonclaim="hybrid-wrapper"]')).toContainText(
+      'proof is not transferred',
+    );
+    await expect(scope.locator('[data-rw15-nonclaim="security-properties"]')).toContainText(
+      'statically declared corrupt authorities',
+    );
+    await expect(scope.locator('[data-rw15-nonclaim="security-properties"]')).toContainText(
+      'does not test rogue-key registration',
+    );
+    await expect(scope.locator('[data-rw15-nonclaim="security-properties"]')).toContainText(
+      'No adaptive-security',
+    );
+    await expect(scope.locator('a', { hasText: 'Rouselakis–Waters' })).toHaveAttribute(
+      'href',
+      'https://doi.org/10.1007/978-3-662-47854-7_19',
+    );
+    await expect(scope.locator('a', { hasText: 'Charm implementation' })).toHaveAttribute(
+      'href',
+      'https://jhuisi.github.io/charm/_modules/abenc_maabe_rw15.html',
+    );
+  });
+});
+
+test.describe('bounded epoch-gating and owner-assisted rewrap claims', () => {
+  test('the lifecycle distinguishes current access, retained history, and rollback freshness', async ({
+    page,
+  }) => {
+    await boot(page);
+    await expect(page.locator('#epoch-revocation')).toHaveAttribute(
+      'data-revocation-ready',
+      'true',
+    );
+    await page.locator('#epoch-revocation-run').click();
+    const result = page.locator('[data-host="epoch-revocation-result"]');
+    await expect(result.locator('[data-revocation-case="cost-ledger"]')).toBeVisible();
+
+    const bobOld = result.locator('[data-revocation-case="bob-old"]');
+    await expect(bobOld).toHaveAttribute('data-code', 'OPENED');
+    await expect(bobOld).toHaveAttribute('data-epoch', '1');
+    await expect(bobOld).toHaveAttribute('data-opened', 'true');
+    await expect(bobOld).toHaveAttribute('data-checkpoint', 'epoch-1');
+    await expect(bobOld).toContainText('retained epoch-1 material still opens');
+
+    const bobCurrent = result.locator('[data-revocation-case="bob-current"]');
+    await expect(bobCurrent).toHaveAttribute('data-code', 'POLICY_UNSATISFIED');
+    await expect(bobCurrent).toHaveAttribute('data-epoch', '2');
+    await expect(bobCurrent).toHaveAttribute('data-opened', 'false');
+    await expect(bobCurrent).toHaveAttribute('data-key-issued', 'false');
+    await expect(bobCurrent).toContainText('HOLDER_REVOKED');
+    await expect(bobCurrent).toContainText('withholds an entire new randomized FAME key');
+
+    const aliceCurrent = result.locator('[data-revocation-case="alice-current"]');
+    await expect(aliceCurrent).toHaveAttribute('data-code', 'OPENED');
+    await expect(aliceCurrent).toHaveAttribute('data-epoch', '2');
+    await expect(aliceCurrent).toHaveAttribute('data-opened', 'true');
+    await expect(aliceCurrent).toContainText('Doctor, Access epoch 2');
+    await expect(aliceCurrent).toContainText('not an independently updateable epoch component');
+
+    const noCheckpoint = result.locator('[data-revocation-case="rollback-no-checkpoint"]');
+    await expect(noCheckpoint).toHaveAttribute('data-code', 'OPENED');
+    await expect(noCheckpoint).toHaveAttribute('data-opened', 'true');
+    await expect(noCheckpoint).toHaveAttribute('data-checkpoint', 'none');
+    await expect(noCheckpoint).toContainText('authenticity does not say they are current');
+
+    const currentCheckpoint = result.locator(
+      '[data-revocation-case="rollback-with-checkpoint"]',
+    );
+    await expect(currentCheckpoint).toHaveAttribute('data-code', 'ROLLBACK_DETECTED');
+    await expect(currentCheckpoint).toHaveAttribute('data-opened', 'false');
+    await expect(currentCheckpoint).toHaveAttribute('data-checkpoint', 'current');
+    await expect(currentCheckpoint).toContainText(
+      'binds object id, epoch, revision, and the digest of the complete current access header',
+    );
+  });
+
+  test('rewrap preserves payload bytes, exposes both escrow powers, and reports actual work', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.locator('#epoch-revocation-run').click();
+    const result = page.locator('[data-host="epoch-revocation-result"]');
+    const bytes = result.locator('[data-revocation-case="payload-header"]');
+    await expect(bytes).toHaveAttribute('data-code', 'HEADER_REWRAPPED_PAYLOAD_UNCHANGED');
+    await expect(bytes).toHaveAttribute('data-payload-identical', 'true');
+    await expect(bytes).toHaveAttribute('data-header-changed', 'true');
+    await expect(bytes).toHaveAttribute('data-payload-bytes-rewritten', '0');
+
+    const digestValues = await bytes.locator('code').allInnerTexts();
+    expect(digestValues).toHaveLength(4);
+    expect(digestValues[0]).toBe(digestValues[1]);
+    expect(digestValues[2]).not.toBe(digestValues[3]);
+    const bytesText = await bytes.innerText();
+    const payloadSize = /Serialized payload: (\d+) bytes before and after/.exec(bytesText);
+    const headerSizes =
+      /Serialized access header: (\d+) bytes at epoch 1, (\d+) bytes at epoch 2/.exec(bytesText);
+    expect(payloadSize).not.toBeNull();
+    expect(headerSizes).not.toBeNull();
+
+    const escrow = result.locator('[data-revocation-case="escrow"]');
+    await expect(escrow).toHaveAttribute('data-code', 'OWNER_AND_AUTHORITY_ESCROW');
+    await expect(escrow.locator('[data-revocation-escrow="owner"]')).toHaveAttribute(
+      'data-opened',
+      'true',
+    );
+    await expect(escrow.locator('[data-revocation-escrow="authority"]')).toHaveAttribute(
+      'data-opened',
+      'true',
+    );
+    await expect(escrow).toContainText('owner capability unwraps the DEK recovery capsule');
+    await expect(escrow).toContainText('master secret mints a satisfying current key');
+
+    const ledgerRows = result.locator('[data-revocation-cost]');
+    await expect(ledgerRows).toHaveCount(14);
+    const ledger = Object.fromEntries(
+      await ledgerRows.evaluateAll((nodes) =>
+        nodes.map((node) => [
+          node.getAttribute('data-revocation-cost') ?? '',
+          Number((node.querySelector('td')?.textContent ?? '').trim()),
+        ]),
+      ),
+    );
+    expect(ledger).toMatchObject({
+      epochAdvances: 1,
+      revocations: 1,
+      holderKeyGenerations: 3,
+      authorityEscrowKeyGenerations: 1,
+      fameHeaderEncryptions: 2,
+      payloadAeadEncryptions: 1,
+      payloadPlaintextBytesEncrypted: new TextEncoder().encode(
+        'CASE-0317: retained teaching record',
+      ).length,
+      ownerCapsuleEncryptions: 1,
+      ownerDekUnwrapsForRewrap: 1,
+      accessDekWraps: 2,
+      checkpointWrites: 2,
+      rewrapOperations: 1,
+      rewrapPayloadBytesWritten: 0,
+    });
+    expect(ledger.accessHeaderBytesWritten).toBe(
+      Number(headerSizes?.[1]) + Number(headerSizes?.[2]),
+    );
+    expect(Number(payloadSize?.[1])).toBeGreaterThan(35);
+  });
+
+  test('the learner-visible scope does not turn the bounded adaptation into a theorem', async ({
+    page,
+  }) => {
+    await boot(page);
+    const boundary = page.locator(
+      '#epoch-revocation [data-revocation-scope="application-layer-fame-adaptation"]',
+    );
+    await expect(boundary).toContainText('not RW15');
+    await expect(boundary).toContainText(
+      'not a revocable-ABE or revocable-storage-ABE construction',
+    );
+    await expect(boundary).toContainText('not public ciphertext update');
+    await expect(boundary).toContainText('not a FAME/RW15/revocation theorem');
+    await expect(boundary).toContainText('owner-secret DEK recovery');
+
+    const scope = page.locator(
+      '#epoch-revocation details[data-revocation-claim-scope="bounded-application-adaptation"]',
+    );
+    await scope.locator('summary').click();
+    await expect(scope).toContainText('retained old key plus retained old header still opens');
+    await expect(scope).toContainText('If storage and its checkpoint roll back together');
+    await expect(scope.locator('[data-revocation-assumption="issuer-state"]')).toContainText(
+      'authenticates stable holder identifiers and authoritative business attributes',
+    );
+    await expect(scope.locator('[data-revocation-assumption="issuer-state"]')).toContainText(
+      'rollback-resistant issuer storage',
+    );
+    await expect(scope.locator('[data-revocation-nonclaim="public-update"]')).toContainText(
+      'There is no public update token',
+    );
+    await expect(scope.locator('[data-revocation-nonclaim="construction"]')).toContainText(
+      'application-layer adaptation around single-authority FAME',
+    );
+    await expect(scope.locator('[data-revocation-nonclaim="proof"]')).toContainText(
+      'No proof combines FAME with this epoch gate',
+    );
+  });
+});
+
 test.describe('structural honesty', () => {
   test('retirement: changing the policy retires every result and says so', async ({ page }) => {
     await boot(page);
@@ -811,7 +1132,9 @@ test.describe('structural honesty', () => {
 
     expect(title).toBe('Attribute Gate');
     // The subtitle is a spec label, not a sentence.
-    expect(sub).toBe('CP-ABE · FAME (2017) · FABESA CP-A2BE (2024) · BLS12-381');
+    expect(sub).toBe(
+      'CP-ABE · FAME (2017) · RW15 multi-authority · FABESA CP-A2BE (2024) · BLS12-381',
+    );
     expect(sub.endsWith('.')).toBe(false);
     // Description and why-it-matters must not be the same thing said twice.
     expect(desc).not.toBe(why);
