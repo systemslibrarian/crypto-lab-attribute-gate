@@ -29,7 +29,7 @@ import type { Page } from '@playwright/test';
  * chevron that is the ONLY affordance saying a select is a select, because
  * `appearance: none` removed the native one — if that glyph is invisible, the
  * control is a rectangle. `.disclose-summary::before` is the triangle on all
- * seven disclosures, which is what says a block can be opened.
+ * eight disclosures, which is what says a block can be opened.
  *
  * TWO SEPARATE CHECKS LIVE HERE.
  *

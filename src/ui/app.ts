@@ -2,8 +2,9 @@
  * The page.
  *
  * One live lab -- one authority, one staff list, one attribute registry, one
- * sealed envelope -- driven by seven exhibits. Everything the page prints came
- * out of the real scheme in src/fame; nothing is staged.
+ * sealed envelope -- driven by the original FAME exhibits plus an independent
+ * FABESA lesson. Everything the page prints comes from the real schemes in
+ * src/fame and src/fabesa; nothing is staged.
  */
 import { gtToHex, ORDER } from '../fame/bls';
 import { FAILURE_CODES, FAILURE_CODE_IDS } from '../fame/codes';
@@ -68,6 +69,7 @@ import {
   type PersonView,
   type Stage,
 } from './views';
+import { createFabesaLesson } from './fabesa';
 
 const DEFAULT_RECORD =
   'PATIENT 00-4417 · Ward 3B · Troponin I 0.42 ng/mL · ECG: ST elevation, leads V2-V4';
@@ -106,7 +108,13 @@ export class App {
     this.root.appendChild(this.revocationPanel());
     this.root.appendChild(this.honestyPanel());
     this.root.appendChild(this.codesPanel());
+    const fabesa = createFabesaLesson();
+    this.root.appendChild(fabesa.element);
+    // Keep the two schemes sequential while their shared pairing counter is
+    // instrumented. data-app-ready is set only after both initial states are
+    // real and learner-visible.
     await this.seal();
+    await fabesa.initialize();
   }
 
   private host(name: string, cls = ''): HTMLElement {
@@ -160,9 +168,9 @@ export class App {
       el(
         'p',
         {},
-        'The scheme is ',
+        'The first eight exhibits use ',
         el('strong', { text: 'FAME' }),
-        ' (Agrawal and Chase, ACM CCS 2017), running over BLS12-381 pairings in your browser. It is a teaching demo, not production cryptography: see the scoping panel near the bottom for exactly what it does and does not show.',
+        ' (Agrawal and Chase, ACM CCS 2017), running over BLS12-381 pairings in your browser. Exhibit 9 is a separate bounded lesson using FABESA CP-A2BE (Meng et al., ACM CCS 2024) to hide attribute values while keeping names, structure, dimensions and lengths public. Both are teaching demos, not production cryptography: each scoping panel says exactly what it does and does not show.',
       ),
     );
   }

@@ -15,7 +15,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Interactive FAME ciphertext-policy attribute-based encryption over BLS12-381: compose an access policy, seal a record through the ABE-KEM, HKDF-SHA-256 and AES-256-GCM, and pool two keys that jointly satisfy the policy to watch collusion fail."
+      content="Interactive FAME public-policy CP-ABE and bounded FABESA hidden-value CP-A2BE over BLS12-381: compose policies, inspect leakage, try candidate decryptions, and watch collusion fail."
     />
 
     <!-- Social meta -->
@@ -23,14 +23,14 @@
     <meta property="og:title" content="Attribute Gate — crypto-lab" />
     <meta
       property="og:description"
-      content="Encrypt to a policy instead of to a person, then watch two users whose attributes jointly satisfy that policy still fail to decrypt together."
+      content="Encrypt to a rule with FAME, then compare a separate FABESA lesson that hides attribute values while names, structure, dimensions and lengths stay public."
     />
     <meta property="og:url" content="https://systemslibrarian.github.io/crypto-lab-attribute-gate/" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Attribute Gate — crypto-lab" />
     <meta
       name="twitter:description"
-      content="Encrypt to a policy instead of to a person, then watch two users whose attributes jointly satisfy that policy still fail to decrypt together."
+      content="Encrypt to a rule with FAME, then compare a separate FABESA lesson that hides attribute values while names, structure, dimensions and lengths stay public."
     />
 
     <link
@@ -166,11 +166,11 @@
       <header class="cl-hero">
         <div class="cl-hero-main">
           <h1 class="cl-hero-title">Attribute Gate</h1>
-          <p class="cl-hero-sub">CP-ABE · FAME · Agrawal-Chase, CCS 2017</p>
+          <p class="cl-hero-sub">CP-ABE · FAME (2017) · FABESA CP-A2BE (2024) · BLS12-381</p>
           <p class="cl-hero-desc">
-            Composes an access policy, seals a record under it with real FAME encryption over
-            BLS12-381, and lets you pool two keys that jointly satisfy the policy so you can watch
-            the decryption fail term by term.
+            Runs real FAME encryption over BLS12-381, including the collusion experiment, then a
+            separate bounded FABESA lesson that hides attribute values and inventories everything
+            the ciphertext still reveals.
           </p>
         </div>
         <aside class="cl-hero-why" aria-label="Why it matters">
@@ -178,8 +178,8 @@
           <p class="cl-hero-why-text">
             Encrypting to a rule instead of a named recipient is how shared medical, legal and
             archival data can be locked down without knowing in advance who will need it. The whole
-            idea collapses if two people can combine their credentials — and it is the one property
-            no ABE explainer ever shows you.
+            idea collapses if two people can combine their credentials. Some deployments also need
+            sensitive attribute values hidden, but “policy hiding” never means all metadata vanishes.
           </p>
         </aside>
       </header>

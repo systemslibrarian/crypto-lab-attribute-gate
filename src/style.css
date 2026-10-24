@@ -942,9 +942,182 @@ tr.row-missing td {
   font-style: italic;
 }
 
+/* ------------------------------------------------------------- FABESA -- */
+
+.fabesa-controls {
+  margin: 0.8rem 0;
+  align-items: flex-end;
+}
+
+.fabesa-explainer {
+  max-width: 80ch;
+  color: var(--text-dim);
+}
+
+.fabesa-observer {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--accent) 4%, var(--panel));
+}
+
+.fabesa-observer > h3 {
+  margin-top: 0;
+}
+
+.fabesa-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 0.75rem 0;
+}
+
+.fabesa-world-card {
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  padding: 0.75rem 0.85rem;
+}
+
+.fabesa-world-card[data-selected="true"] {
+  border-color: var(--accent);
+}
+
+.fabesa-world-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fabesa-world-head h4 {
+  margin: 0;
+}
+
+.fabesa-world-shape {
+  margin-top: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.fabesa-world-meta,
+.fabesa-fingerprint {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.fabesa-fingerprint code {
+  color: var(--accent-dim);
+  font-family: var(--mono);
+}
+
+.fabesa-leak-table th:first-child,
+.fabesa-ground-table th:first-child {
+  white-space: nowrap;
+}
+
+.fabesa-hidden-row td,
+.fabesa-hidden-row th {
+  background: color-mix(in oklab, var(--ok) 7%, transparent);
+}
+
+.fabesa-ground-table code {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.fabesa-attempts td:nth-child(2) {
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.fabesa-no-attempts,
+.fabesa-pairing-total {
+  margin-top: 0.65rem;
+  font-size: 0.84rem;
+  color: var(--text-dim);
+}
+
+.fabesa-pairing-total span {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.fabesa-plaintext {
+  max-width: 100%;
+  margin: 0.65rem 0 0;
+  padding: 0.55rem 0.7rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--ok);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.fabesa-limit-facts {
+  margin: 0.55rem 0 0;
+  padding-left: 1.15rem;
+  color: var(--text-dim);
+  font-size: 0.84rem;
+}
+
+.fabesa-limit-facts li {
+  margin: 0.22rem 0;
+}
+
+.fabesa-scope {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.fabesa-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.fabesa-scope-card {
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.fabesa-scope-card h4 {
+  margin-top: 0;
+}
+
+.fabesa-scope-card p {
+  font-size: 0.84rem;
+  color: var(--text-dim);
+}
+
 /* ---------------------------------------------------------- responsive -- */
 
 @media (max-width: 640px) {
+  .fabesa-comparison,
+  .fabesa-scope-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fabesa-controls .field,
+  .fabesa-controls .select-wrap,
+  .fabesa-controls .select,
+  .fabesa-controls .btn {
+    width: 100%;
+  }
+
   .pipe-arrow {
     display: none;
   }

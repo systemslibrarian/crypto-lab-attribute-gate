@@ -80,7 +80,7 @@ import type { Page } from '@playwright/test';
  * this stylesheet declares two author `content` marks that carry real
  * meaning — `.select-wrap::after`, the chevron that is the only affordance
  * saying a select is a select once `appearance: none` removes the native one,
- * and `.disclose-summary::before`, the triangle on all seven disclosures.
+ * and `.disclose-summary::before`, the triangle on all eight disclosures.
  *
  * SECOND, `aria-hidden` text that is still painted — see the `ariaHidden` note
  * below. `gate.ts` measures every `aria-hidden` subtree explicitly with the
@@ -534,11 +534,12 @@ export async function auditContrast(
       // not `display: none`, and Chromium keeps the last laid-out geometry for
       // that subtree — so the `display`/rect tests above all pass for text
       // that paints nothing. `checkVisibility()` catches it. This page is full
-      // of the shape: all seven `.disclose` blocks — the KEM boundary, the
+      // of the shape: all eight `.disclose` blocks — the KEM boundary, the
       // BSW07 argument, the paper's one-use wording, the matrix construction,
       // what a key is, the residual derivation and the cost of real
-      // revocation — are <details> that ship shut, and they hold most of the
-      // page's depth. The gate opens them by clicking their <summary>, which
+      // revocation, plus FABESA's encryptor-only fixture — are <details> that
+      // ship shut, and they hold most of the page's depth. The gate opens them
+      // by clicking their <summary>, which
       // is the route a reader has, rather than setting `.open` from script —
       // which is what the gate this replaces did, to every <details> on the
       // page, before its only scan.

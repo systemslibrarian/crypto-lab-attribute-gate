@@ -16,7 +16,7 @@ import {
  * headline policy already sealed and nothing attempted; the shared skip link
  * focused; Alice opening the record and Bob being refused, so the pass and
  * fail verdict tones and the highlighted tree nodes and matrix rows are both
- * scanned; all seven disclosures opened through their own summaries and shut
+ * scanned; all eight disclosures opened through their own summaries and shut
  * again; MALFORMED_POLICY raised by typing a reserved colon into the custom
  * attribute field, and the unsealed warning that follows an accepted edit; the
  * reuse preset, where the one-use transform indexes Doctor into two rows and
@@ -25,8 +25,9 @@ import {
  * switched through its own select; the six-stage collusion walkthrough with
  * its ledger and both blocked splice directions, its coherent-key control
  * case, and its same-holder refusal; the escrow fixture's two steps; both
- * branches of the revocation fixture; three hover states and three focus
- * rings. Every one of those states is scanned, at desktop and phone width.
+ * branches of the revocation fixture; FABESA success, negative, malformed,
+ * retirement and cap states; three hover states and three focus rings. Every
+ * one of those states is scanned at desktop, phone and reflow-headroom widths.
  *
  * Dark is the only theme this lab ships, so there is no second theme pass.
  *

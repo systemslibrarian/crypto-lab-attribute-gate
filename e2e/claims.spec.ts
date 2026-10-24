@@ -552,6 +552,179 @@ test.describe('the negative claims, as fixtures', () => {
   });
 });
 
+test.describe('FABESA partially hidden-policy claims', () => {
+  test('the two worlds expose the same public shape while their equal-length values differ', async ({
+    page,
+  }) => {
+    await boot(page);
+    await expect(page.locator('#fabesa')).toHaveAttribute('data-fabesa-ready', 'true');
+
+    const cards = page.locator('[data-fabesa-world]');
+    await expect(cards).toHaveCount(2);
+    const shapes = await cards.locator('.fabesa-world-shape').allInnerTexts();
+    const metadata = await cards.locator('.fabesa-world-meta').allInnerTexts();
+    expect(new Set(shapes).size).toBe(1);
+    expect(new Set(metadata).size).toBe(1);
+
+    const fingerprints = await cards.locator('.fabesa-fingerprint code').allInnerTexts();
+    expect(fingerprints).toHaveLength(2);
+    expect(fingerprints[0]).not.toBe(fingerprints[1]);
+
+    const observer = page.locator('[data-fabesa-role="observer"]');
+    const observerText = await observer.innerText();
+    for (const secret of [
+      'BLOCKED',
+      'PENDING',
+      'CARD-017',
+      'NEUR-204',
+      'RESEARCH',
+      'CLINICAL',
+      'CARDIAC',
+      'SEIZURE',
+    ]) {
+      expect(observerText).not.toContain(secret);
+    }
+    await expect(observer.locator('[data-visibility="public"]')).not.toHaveCount(0);
+    await expect(observer.locator('[data-visibility="hidden"]')).toHaveCount(2);
+    await expect(observer).toContainText('Emergency');
+    await expect(observer).toContainText('3 rows x 2 columns');
+
+    await page.locator('#fabesa-ground-truth > summary').click();
+    const valueRows = page.locator('#fabesa-ground-truth tbody tr');
+    await expect(valueRows).toHaveCount(3);
+    for (let index = 0; index < 3; index++) {
+      const cells = await valueRows.nth(index).locator('td').allInnerTexts();
+      const a = cells[0];
+      const b = cells[1];
+      expect(a).not.toBe(b);
+      expect(new TextEncoder().encode(a).length).toBe(new TextEncoder().encode(b).length);
+      expect(Number(cells[2])).toBe(new TextEncoder().encode(a).length);
+    }
+  });
+
+  test('candidate attempts are sequential, measured, and authenticated without an expected plaintext', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.locator('#fabesa-open').click();
+    const result = page.locator('[data-host="fabesa-attempt"] .verdict');
+    await expect(result).toHaveAttribute('data-code', 'FABESA_OPENED');
+
+    const rows = result.locator('[data-candidate]');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toHaveAttribute('data-aead', 'rejected');
+    await expect(rows.nth(1)).toHaveAttribute('data-aead', 'accepted');
+    await expect(rows.nth(0)).toHaveAttribute('data-pairing-terms', '4');
+    await expect(rows.nth(1)).toHaveAttribute('data-pairing-terms', '4');
+
+    const measured = (await rows.evaluateAll((nodes) =>
+      nodes.map((node) => Number(node.getAttribute('data-pairings'))),
+    ));
+    // This secure-random fixture is nondegenerate with overwhelming
+    // probability, so all four Figure 5 terms must reach the primitive. The
+    // deterministic unit suite separately covers the legitimate r=0 identity
+    // short-circuit and proves that boundary reports one executed call.
+    expect(measured).toEqual([4, 4]);
+    const total = Number(await result.locator('[data-total-pairings]').getAttribute('data-total-pairings'));
+    expect(total).toBe(8);
+    await expect(result.locator('[data-total-pairing-terms="8"]')).toBeVisible();
+    await expect(result).toContainText('not given an expected plaintext');
+    await expect(result.locator('[data-fabesa-plaintext="revealed"]')).toBeVisible();
+  });
+
+  test('wrong values, a foreign authority, and record tampering share the generic tag failure', async ({
+    page,
+  }) => {
+    await boot(page);
+    const verdict = page.locator('[data-host="fabesa-attempt"] .verdict');
+
+    await page.selectOption('#fabesa-key-profile', 'wrong-values');
+    await page.locator('#fabesa-open').click();
+    await expect(verdict).toHaveAttribute('data-code', 'NO_CANDIDATE_AUTHENTICATED');
+
+    await page.selectOption('#fabesa-key-profile', 'foreign-authority');
+    await page.locator('#fabesa-open').click();
+    await expect(verdict).toHaveAttribute('data-code', 'NO_CANDIDATE_AUTHENTICATED');
+
+    await page.selectOption('#fabesa-key-profile', 'alice');
+    await page.selectOption('#fabesa-modification', 'flip-record');
+    await page.locator('#fabesa-open').click();
+    await expect(verdict).toHaveAttribute('data-code', 'NO_CANDIDATE_AUTHENTICATED');
+    await expect(verdict).toContainText('does not identify which cause occurred');
+  });
+
+  test('public mismatch and malformed input stop before pairing work', async ({ page }) => {
+    await boot(page);
+    const verdict = page.locator('[data-host="fabesa-attempt"] .verdict');
+
+    await page.selectOption('#fabesa-key-profile', 'missing-names');
+    await page.locator('#fabesa-open').click();
+    await expect(verdict).toHaveAttribute('data-code', 'PUBLIC_NAMES_UNSATISFIED');
+    await expect(verdict.locator('[data-total-pairings="0"]')).toBeVisible();
+    await expect(verdict.locator('[data-candidate]')).toHaveCount(0);
+
+    await page.selectOption('#fabesa-modification', 'malformed-envelope');
+    await page.locator('#fabesa-open').click();
+    await expect(verdict).toHaveAttribute('data-code', 'MALFORMED_FABESA_CIPHERTEXT');
+    await expect(verdict.locator('[data-total-pairings="0"]')).toBeVisible();
+  });
+
+  test('an unexpected WebCrypto failure is not disguised as candidate rejection', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.evaluate(() => {
+      Object.defineProperty(crypto.subtle, 'decrypt', {
+        configurable: true,
+        value: async () => {
+          throw new TypeError('synthetic WebCrypto runtime failure');
+        },
+      });
+    });
+
+    await page.locator('#fabesa-open').click();
+    const verdict = page.locator('[data-host="fabesa-attempt"] .verdict');
+    await expect(verdict).toHaveAttribute('data-code', 'FABESA_LESSON_ERROR');
+    await expect(verdict).toContainText('synthetic WebCrypto runtime failure');
+    await expect(verdict).toContainText('not claimed because the operation aborted unexpectedly');
+    await expect(verdict.locator('[data-total-pairings]')).toHaveCount(0);
+  });
+
+  test('changing a FABESA input retires a result, while reselecting it is a no-op', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.locator('#fabesa-open').click();
+    const host = page.locator('[data-host="fabesa-attempt"]');
+    await expect(host.locator('.verdict')).toHaveAttribute('data-code', 'FABESA_OPENED');
+
+    await page.selectOption('#fabesa-world', 'a');
+    await expect(host.locator('[data-retired="true"]')).toHaveCount(0);
+    await expect(host.locator('.verdict')).toHaveAttribute('data-code', 'FABESA_OPENED');
+
+    await page.selectOption('#fabesa-world', 'b');
+    await expect(host.locator('[data-retired="true"]')).toBeVisible();
+    await expect(host.locator('.verdict[data-code]')).toHaveCount(0);
+  });
+
+  test('resealing changes the ciphertext and the candidate cap fails closed before decryption', async ({
+    page,
+  }) => {
+    await boot(page);
+    const fingerprint = page.locator('[data-fabesa-world="a"] .fabesa-fingerprint code');
+    const before = await fingerprint.innerText();
+    await page.locator('#fabesa-reseal').click();
+    await expect(fingerprint).not.toHaveText(before);
+
+    await page.locator('#fabesa-run-cap').click();
+    const cap = page.locator('[data-host="fabesa-cap"] .verdict');
+    await expect(cap).toHaveAttribute('data-code', 'CANDIDATE_LIMIT_EXCEEDED');
+    await expect(cap).toContainText('Candidate 33');
+    await expect(cap).toContainText('45 possible pairs');
+    await expect(cap.locator('[data-total-pairings="0"]')).toBeVisible();
+  });
+});
+
 test.describe('structural honesty', () => {
   test('retirement: changing the policy retires every result and says so', async ({ page }) => {
     await boot(page);
@@ -638,7 +811,7 @@ test.describe('structural honesty', () => {
 
     expect(title).toBe('Attribute Gate');
     // The subtitle is a spec label, not a sentence.
-    expect(sub).toBe('CP-ABE · FAME · Agrawal-Chase, CCS 2017');
+    expect(sub).toBe('CP-ABE · FAME (2017) · FABESA CP-A2BE (2024) · BLS12-381');
     expect(sub.endsWith('.')).toBe(false);
     // Description and why-it-matters must not be the same thing said twice.
     expect(desc).not.toBe(why);
