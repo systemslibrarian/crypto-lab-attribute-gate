@@ -1,6 +1,6 @@
 # Attribute Gate
 
-**Encrypt to a policy instead of to a person — then watch two users whose attributes jointly satisfy that policy still fail to decrypt together.**
+**Encrypt to a policy instead of to a person, test collusion resistance, then compare a separate construction that hides attribute values while exposing its remaining leakage.**
 
 [Live demo](https://systemslibrarian.github.io/crypto-lab-attribute-gate/) · one of the browser demos in the [Crypto Lab](https://crypto-lab.systemslibrarian.dev/) suite.
 
@@ -8,23 +8,26 @@
 
 ## What It Is
 
-A browser implementation of **FAME** — *Fast Attribute-based Message Encryption*, Shashank Agrawal and Melissa Chase, **ACM CCS 2017** ([eprint 2017/807](https://eprint.iacr.org/2017/807)) — a ciphertext-policy attribute-based encryption scheme, running over **BLS12-381** pairings.
+Two independent browser lessons run over real **BLS12-381** pairings. Exhibits 1–8 implement **FAME** — *Fast Attribute-based Message Encryption*, Shashank Agrawal and Melissa Chase, **ACM CCS 2017** ([ePrint 2017/807](https://eprint.iacr.org/2017/807)) — as public-policy ciphertext-policy attribute-based encryption. Exhibit 9 implements the CP-A2BE construction from **FABESA** — Long Meng, Liqun Chen, Yangguang Tian and Mark Manulis, **ACM CCS 2024** ([ePrint 2024/986](https://eprint.iacr.org/2024/986)) — as a bounded, partially hidden-policy lesson.
 
 Ordinary public-key encryption addresses a *person*. Ciphertext-policy ABE addresses a *rule*: you encrypt under `(Doctor AND Cardiology) OR Emergency`, and whoever turns out to hold a satisfying set of attributes can decrypt. Nobody has to know in advance who that will be.
 
 The security property that makes it more than a filing convention is **collusion resistance**: two people whose attributes only *jointly* satisfy the policy must not be able to pool their key material. Every ABE paper states this. This demo makes you do it — it splices two real keys into one, runs the genuine decryption on the result, and shows the exact term that refuses to cancel.
 
+FABESA addresses a different question. Its partially hidden payload withholds attribute **values**, but deliberately publishes attribute names, the matrix, row map, structure, dimensions and lengths. The page compares two equal-public-payload worlds, performs the paper's candidate decryptions, and uses an AES-GCM tag—not an expected plaintext—as the bounded teaching wrapper's success oracle.
+
 ### The exact primitives
 
 | Layer | Primitive | Source |
 |---|---|---|
-| ABE | FAME CP-ABE, linear-assumption parameter k = 2 | Agrawal & Chase, CCS 2017, Figure 3.1 |
+| Public-policy ABE | FAME CP-ABE, linear-assumption parameter k = 2 | Agrawal & Chase, CCS 2017, Figure 3.1 |
+| Hidden-value ABE | FABESA CP-A2BE, bounded one-value-per-name profile | Meng et al., CCS 2024, Figure 5 and §3.3 |
 | Pairing | BLS12-381, Type-3: `e : G1 × G2 → GT` | `@noble/curves` v2 |
-| Random oracle `H → G1` | `BLS12381G1_XMD:SHA-256_SSWU_RO_` | RFC 9380 |
+| Random oracles `H → G1` | Scheme-specific, versioned DSTs over `BLS12381G1_XMD:SHA-256_SSWU_RO_` | RFC 9380 |
 | KDF | HKDF-SHA-256 | RFC 5869, via WebCrypto |
 | AEAD | AES-256-GCM, 96-bit nonce, 128-bit tag | NIST SP 800-38D, via WebCrypto |
 
-Setup, KeyGen, Encrypt and Decrypt are hand-written from the paper so they stay inspectable, along with the modular inverse, the access-tree → MSP conversion and the Lagrange reconstruction. Only the field/curve arithmetic and hash-to-curve are library code.
+Setup, KeyGen, Encrypt and Decrypt for both constructions are hand-written from their papers so they stay inspectable, along with the modular inverse, access-tree → MSP conversion, reconstruction and bounded FABESA candidate enumeration. Only the field/curve arithmetic and hash-to-curve are library code.
 
 ### Why FAME, and not the BSW07 scheme everybody cites
 
@@ -39,6 +42,8 @@ Every group element the page prints is tagged `G1`, `G2`, `GT` or `Zp`. That typ
 ### Security model, in one paragraph
 
 FAME is proved **fully secure** under a variant of the *k*-linear assumption in the **random oracle model**. It is single-authority: the master secret can mint a key for any attribute set, so **the authority can decrypt everything** (exhibit 6). It provides **no revocation** (exhibit 7). It carries a **one-use restriction** — the MSP row-labelling map must be injective — worked around here by indexed attribute copies, at a cost of a factor of *k* in key size (exhibit 2).
+
+FABESA Theorem 4 proves adaptive anonymity in the random-oracle model under the DLIN assumption, using the paper's asymmetric Type-III formulation in both `G1` and `G2`. Its challenge policies must expose the same public payload, its challenge messages must be equal-size, and every queried key must satisfy neither challenge policy. This lab's canonical encodings, finite candidate search and HKDF/AES-GCM record wrapper are teaching adaptations; the page does **not** transfer Theorem 4 to that composition.
 
 **This is not production cryptography.** It is a teaching demo. Every key is generated in the browser tab, lives in memory only, and is discarded when the tab closes. Nothing is constant-time and no side-channel resistance is claimed.
 
@@ -62,11 +67,15 @@ FAME is proved **fully secure** under a variant of the *k*-linear assumption in 
 
 8. **Failure codes.** `POLICY_UNSATISFIED` · `ATTR_MISSING` · `THRESHOLD_NOT_MET` · `COLLUSION_BLOCKED` · `MALFORMED_POLICY` · `ATTRIBUTE_REUSED`. Every verdict prints its identifier verbatim. `ATTRIBUTE_REUSED` is an *internal invariant*, never a user-facing verdict: with the indexed-copy transform in place a duplicate row label cannot reach the scheme, so it is an assertion — if it ever fires, the transform is broken.
 
+9. **Hide attribute values—and inventory what remains public.** Two FABESA ciphertexts use different sensitive values behind the same three names, Boolean structure, `3 × 2` MSP and serialized-size profile. The observer sees that public payload, group elements, nonce, context and lengths but not the values or plaintext. A key with two publicly plausible reconstruction candidates rejects the wrong hidden-value branch and authenticates the right one; wrong values, foreign-authority components and the sealed-record bit flip share a generic failure. The lesson also refuses an over-32-candidate fixture before cryptographic trials and keeps the paper theorem separate from the bounded hybrid adaptation.
+
 ---
 
 ## When to Use It
 
 Use attribute-based encryption when the set of people who should read something is defined by a **rule** you can state in advance but a **membership** you cannot: shared medical records, classified archives with clearance lattices, multi-tenant data where access follows job function rather than identity.
+
+Use a policy-hiding construction only after stating which parts of the policy must be hidden. This FABESA profile is useful when values such as a department or clearance are sensitive but their category names and access structure may remain public; it is not suitable when names, structure, dimensions, traffic shape or outcomes must also be concealed.
 
 **Do NOT use it** when any of these is true:
 
@@ -81,7 +90,7 @@ Use attribute-based encryption when the set of people who should read something 
 
 <https://systemslibrarian.github.io/crypto-lab-attribute-gate/>
 
-You can: build any monotone access tree from the attribute universe or type your own attribute; seal a record; issue and re-issue keys; try to open the record as any holder; switch a gate to a threshold and watch the Lagrange reconstruction; pool any two keys and inspect the term that refuses to cancel; mint an authority key; and revoke someone and watch it change nothing.
+You can: build any monotone access tree from the attribute universe or type your own attribute; seal a record; issue and re-issue keys; try to open the record as any holder; switch a gate to a threshold and watch the Lagrange reconstruction; pool any two keys and inspect the term that refuses to cancel; mint an authority key; revoke someone and watch it change nothing; then compare two equal-shape FABESA ciphertext worlds, follow their candidate/tag ledger, exercise negative cases and trigger the explicit search bound.
 
 ---
 
@@ -99,7 +108,11 @@ The threat model this lab makes concrete, and the failure modes an implementer m
 
 **Nothing detects collusion.** When a pooled key fails, no component of FAME noticed anything. Decryption ran to completion and returned a well-formed group element; it was simply the wrong one, and the AEAD tag is what refused. A system that expects an ABE library to *report* a collusion attempt is expecting something the primitive does not offer.
 
-**Policy privacy is not provided.** The policy travels with the ciphertext in the clear. CP-ABE hides the *data*, not the *rule*. Hidden-policy ABE is a separate construction.
+**FAME provides no policy privacy; FABESA here provides only partial policy hiding.** FAME's whole policy travels with its ciphertext. The separate FABESA lesson hides attribute values, not names, matrix, row map, Boolean structure, dimensions, serialized lengths, key attribute names, candidate counts or observed outcomes. Calling that “the policy is hidden” without the qualifier would be false.
+
+**Candidate search is observable and bounded.** Matching public names can yield several possible reconstructions because their values are hidden. The wrapper tries them sequentially and uses authentication as its oracle, so work and success position can leak; it refuses above 32 candidates or 10 matched rows. It is not an oblivious search protocol.
+
+**The FABESA wrapper is not the FABESA theorem.** Figure 5 encrypts one `GT` element. Canonical identifier encodings, HKDF, AES-GCM and the tag-based candidate oracle make the browser lesson executable, but no proof in this repository establishes adaptive anonymity for that composition. The GCM tag recognizes a candidate-derived key and protects data under that key; it does not authenticate a sender or ciphertext origin, and the lab makes no CCA-security claim. ABE encryption is public, so anyone can create a new envelope containing attacker-chosen content.
 
 **The message space is one GT element.** Encrypting application data directly is not merely inefficient, it is impossible. The KEM/KDF/AEAD split is mandatory, and the AEAD's own properties — nonce uniqueness, associated data, tag length — are then yours to get right.
 
@@ -149,7 +162,7 @@ npx playwright install chromium   # once, before either browser suite
 
 ## Build & Verify
 
-**136 unit tests pass** across five Vitest files, plus **23 claims tests** and the accessibility gate at two viewport widths.
+**162 unit tests pass** across six Vitest files. The separate browser claims suite and accessibility gate cover the production page at desktop, 380px and the 280px reflow-headroom width.
 
 | Suite | What it covers |
 |---|---|
@@ -158,7 +171,8 @@ npx playwright install chromium   # once, before either browser suite
 | `src/fame/kat.test.ts` | **Published spec vectors**: RFC 9380 §J.9.1 hash-to-curve (5), RFC 5869 HKDF-SHA-256 (3), Wycheproof AES-256-GCM (6) |
 | `src/fame/vectors.test.ts` | The pinned FAME vectors, and their **independent re-derivation** |
 | `src/fame/system.test.ts` | The hybrid pipeline, the failure-code contract, the exhibits end to end |
-| `e2e/a11y.spec.ts` | The WCAG 2.1 A/AA gate, driven through every state the page renders, at 1280px and 380px |
+| `src/fabesa/fabesa.test.ts` | Canonical encodings; independently recomputed Figure 5 Setup, KeyGen, Encrypt and Decrypt equations; public/hidden payload boundaries; bounded candidate enumeration; the tag oracle; authority, tampering and malformed-input negatives |
+| `e2e/a11y.spec.ts` | The WCAG 2.1 A/AA gate, driven through every state the page renders, at desktop, 380px and 280px |
 | `e2e/claims.spec.ts` | Whether the page tells the truth — see below |
 
 ### On known-answer tests
@@ -169,13 +183,15 @@ First, it runs **published vectors for every standardised primitive underneath**
 
 Second, it **pins its own**, in `vectors/fame-vectors.json`: a complete run — public key, master secret, five user keys, the ciphertext, a collusion residual, a threshold reconstruction and the KEM output — with **every intermediate element tagged with its group**. `src/fame/vectors.test.ts` then rebuilds those elements from the seed's scalars using only the pairing and field helpers, **never calling `setup`, `keygen`, `encrypt` or `decrypt`**, and checks the pairing equations against the pinned hex. A test that re-runs the implementation it is checking will agree with its own bugs; this one takes a different route to the same numbers.
 
+**No official FABESA vectors are published either.** The FABESA suite therefore fixes test randomness, derives every Setup/KeyGen/Encrypt term independently from the sampled witnesses, checks the nontrivial reconstruction coefficients and verifies the recovered `GT` element. It also guards two transcription traps in the authors' demonstration artifact: Figure 5 has an independent `g3`, and both hash factors in `ct1` are exponentiated.
+
 ### On the claims suite
 
-`e2e/claims.spec.ts` asks whether the *page* is honest, which is a different question from whether the *code* is correct. It mixes cross-checks between two surfaces that must agree (a key card's element count against the labels it lists; the rendered failure-code table against the exported constants), independent re-derivations (the reconstruction recomputed from the numbers parsed back out of the rendered matrix, with a modular inverse computed by Fermat rather than by the extended Euclid the page uses), and parts-sum-to-whole checks (matrix columns against `1 + Σ(k−1)` over the gate controls on screen). It also holds the negative claims as fixtures — the revoked key opening a later record, escrow as two steps — plus retirement, a no-op guard, and the `[hidden]` cascade probe.
+`e2e/claims.spec.ts` asks whether the *page* is honest, which is a different question from whether the *code* is correct. It mixes cross-checks between two surfaces that must agree (a key card's element count against the labels it lists; the rendered failure-code table against the exported constants), independent re-derivations (the reconstruction recomputed from the numbers parsed back out of the rendered matrix, with a modular inverse computed by Fermat rather than by the extended Euclid the page uses), and parts-sum-to-whole checks (matrix columns against `1 + Σ(k−1)` over the gate controls on screen). It also checks FABESA's equal-public-payload comparison, observer/value boundary, sequential candidate ledger, actual pairing totals, generic negative outcomes, unexpected-error escalation, result retirement and fail-closed cap. The suite retains the earlier revoked-key, two-step escrow, no-op and `[hidden]`-cascade fixtures.
 
 ### Proving the gates bite
 
-A green suite is not evidence until it has been watched failing. Four mutations were applied to the source, one at a time, each confirmed to leave the build succeeding and the bundle hash changed before the owning gate was run, and each reverted immediately afterwards with the hash returning to its pre-mutation value:
+A green suite is not evidence until it has been watched failing. Six mutations were applied to the source, one at a time, each confirmed to leave the build succeeding and the bundle hash changed before the owning gate was run, and each reverted immediately afterwards with the hash returning to its pre-mutation value:
 
 | Mutation | Owning gate | What it reported |
 |---|---|---|
@@ -183,18 +199,22 @@ A green suite is not evidence until it has been watched failing. Four mutations 
 | `indexedLabel` collapses every copy to `:1` (the reference implementation's index-stripping bug) | `msp.test.ts`, `vectors.test.ts` | Failures naming `ATTRIBUTE_REUSED: row label "Doctor:1" appears twice` |
 | The Lagrange numerator loses its sign | `msp.test.ts` | 7 failures — the basis no longer sums to 1, and equation 2.1 fails on every policy shape |
 | `--border-strong` degraded to the original token | `a11y.spec.ts` | Non-text contrast failures naming every button, select and input at 2.14:1 and 1.97:1 against a 3:1 requirement |
+| FABESA `ct1` raises both hidden-value hashes by `s1`, discarding `s2` from the second branch | `fabesa.test.ts` | 6 failures — the independent Figure 5 equation, recovery, pinned fingerprint, one-row opening, two-candidate opening and no-expected-message check all reject the mutation |
+| The hard FABESA candidate ceiling moves from 32 to 33 | `fabesa.test.ts` | The 3-of-7 fixture reports the changed bound instead of refusing at the required candidate 33 |
 
 The first attempt at the first mutation is worth recording: replacing `gtDiv` with `gtMul` left `gtDiv` unused, `tsc` refused the build, and the suite would then have run against the previous bundle — a mutation that breaks the build proves nothing at all.
 
 ### The accessibility gate
 
-`npm run build && npm run test:a11y` must pass with **zero violations** before anything deploys. The gate scans the production build in Chromium at desktop and phone width, driving the page through every state it renders — including the refusals, `MALFORMED_POLICY`, the collusion walkthrough, and every disclosure opened through its own `<summary>`. It asserts axe's `incomplete` bucket as well as `violations`, computes contrast arithmetically over composited surfaces (because every meaningful fill here is a `color-mix()` axe declines to resolve), measures non-text contrast against a ratcheting baseline, and adds the reflow and keyboard-reachability checks axe has no rules for.
+`npm run build && npm run test:a11y` must pass with **zero violations** before anything deploys. The gate scans the production build in Chromium at desktop, 380px and 280px, driving the page through every state it renders — including the FAME refusals, `MALFORMED_POLICY`, collusion walkthrough, every disclosure opened through its own `<summary>`, and FABESA success, negative, malformed, retired and candidate-cap states. It asserts axe's `incomplete` bucket as well as `violations`, computes contrast arithmetically over composited surfaces (because every meaningful fill here is a `color-mix()` axe declines to resolve), measures non-text contrast against a ratcheting baseline, and adds the reflow and keyboard-reachability checks axe has no rules for.
 
 ---
 
 ## Performance
 
 Wall-clock figures from a browser say more about the reader's machine than about the scheme, so what this lab quotes — and what it prints on screen — are **counts**, which are exact and load-invariant.
+
+FAME's operation counts are:
 
 | Operation | Cost |
 |---|---|
@@ -207,6 +227,16 @@ Wall-clock figures from a browser say more about the reader's machine than about
 The last line is FAME's headline result, and it is the reason the scheme exists: earlier fully secure CP-ABE constructions paid a pairing per attribute. Here decryption is six pairings for a two-row policy and six for a sixty-row one; everything that grows with the policy is exponentiation in `G1`, the cheap group. The oracle count is `6(n1 + n2)` rather than `6·n1·n2` because the column hashes are shared across every row — and the `n2` term is the same set of points `KeyGen` already queried for `sk'`, which is why the two sides agree at all.
 
 That constant is **shown, not asserted**. Every verdict on the page prints the number of pairings the attempt actually computed, counted at the primitive; `src/fame/system.test.ts` asserts it is exactly 6 for policies of different sizes, and 0 when the policy check fails before decryption runs. The one-use transform's cost is displayed the same way — the key-size column in exhibit 2 is a count, not a claim.
+
+FABESA has a different cost shape:
+
+| Operation | Cost in this bounded profile |
+|---|---|
+| Public candidate enumeration | Subsets of matching public names, stopped at 10 matched rows or before candidate 33 |
+| Decrypt one candidate | Four pairing terms, plus three `G1` exponentiations per selected row |
+| Hybrid open | Candidates are tried sequentially until AES-GCM authenticates; the page reports the actual pairing-counter delta for every attempt and the total |
+
+Four pairing terms are therefore required **per candidate**, not per ciphertext search. A result that succeeds on candidate two normally executes eight nonidentity pairing calls; a paper-faithful zero-scalar identity case can execute fewer, which is why the page reports terms and measured calls separately. A public-name failure or candidate-bound refusal performs none. Search order and total work are visible leakage, not a privacy claim.
 
 For orientation only, and not a benchmark: on an unloaded M-series laptop the page completes Setup, five KeyGens and an Encrypt in roughly a second, which is what the initial seal costs before anything is clickable.
 

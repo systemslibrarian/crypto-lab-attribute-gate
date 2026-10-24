@@ -37,10 +37,11 @@ export const REFLOW = { width: 280, height: 800 };
  *
  *  2. NOTHING IS REVEALED FROM SCRIPT. The old drive stripped every `[hidden]`
  *     and set every `<details>.open` by JS before its only scan. This page has
- *     seven `<details class="disclose">` blocks -- the KEM boundary, the
+ *     eight `<details class="disclose">` blocks -- the KEM boundary, the
  *     BSW07-versus-FAME argument, the paper's one-use wording, the matrix
- *     construction, what a key is, the residual derivation, and what real
- *     revocation would cost -- and every one of them SHIPS SHUT. The state a
+ *     construction, what a key is, the residual derivation, what real
+ *     revocation would cost, and FABESA's encryptor-only ground truth -- and
+ *     every one of them SHIPS SHUT. The state a
  *     reader arrives at is scanned first, and each disclosure is then opened
  *     by clicking its `<summary>`, which is the route a reader has.
  *
@@ -261,7 +262,7 @@ export async function boot(page: Page): Promise<void> {
   ).toHaveCount(0);
 
   // ── The arrival state ───────────────────────────────────────────────────
-  await expect(page.locator('section.panel')).toHaveCount(8);
+  await expect(page.locator('section.panel')).toHaveCount(9);
   await expect(page.locator('#preset')).toHaveValue('headline');
   await expect(page.locator('[data-host="formula"] code')).toHaveText(
     '((Doctor AND Cardiology) OR Emergency)',
@@ -284,8 +285,17 @@ export async function boot(page: Page): Promise<void> {
   await expect(page.locator('[data-host="escrow"]')).toBeEmpty();
   await expect(page.locator('[data-host="revocation"]')).toBeEmpty();
 
+  // The independent FABESA lesson finishes both ciphertexts before the app is
+  // declared ready. Its observer state is populated, while neither the opener
+  // nor the candidate-cap fixture has run yet.
+  await expect(page.locator('#fabesa')).toHaveAttribute('data-fabesa-ready', 'true');
+  await expect(page.locator('[data-host="fabesa-seal"] .verdict-pass')).toBeVisible();
+  await expect(page.locator('[data-fabesa-world]')).toHaveCount(2);
+  await expect(page.locator('[data-host="fabesa-attempt"]')).toBeEmpty();
+  await expect(page.locator('[data-host="fabesa-cap"]')).toBeEmpty();
+
   // ── Every disclosure ships shut ─────────────────────────────────────────
-  await expect(page.locator('details.disclose')).toHaveCount(7);
+  await expect(page.locator('details.disclose')).toHaveCount(8);
   await expect(page.locator('details.disclose[open]')).toHaveCount(0);
 
   await settle(page);
@@ -469,7 +479,7 @@ async function soft(fn: () => Promise<void>): Promise<void> {
  * text node. This page has two generated marks that matter -- the
  * `.select-wrap::after` chevron on every styled `<select>`, which is the ONLY
  * affordance saying a select is a select once `appearance: none` removes the
- * native one, and the `.disclose-summary::before` triangle on all seven
+ * native one, and the `.disclose-summary::before` triangle on all eight
  * disclosures.
  *
  * IT IS CALLED FROM `scan()`, deliberately. Fleet-wide this oracle had been
@@ -630,7 +640,7 @@ async function waitSealed(page: Page): Promise<void> {
  * Shaping this drive:
  *
  *  - THE ARRIVAL STATE IS SCANNED FIRST, as a reader gets it: headline policy,
- *    record already sealed, nothing attempted, all seven disclosures shut.
+ *    record already sealed, nothing attempted, all eight disclosures shut.
  *
  *  - EVERY VERDICT TONE IS REACHED. The page has three -- opened (pass),
  *    denied (fail) and blocked (warn) -- plus MALFORMED_POLICY, and each one
@@ -681,12 +691,12 @@ export async function driveAllStates(page: Page, prefix: string): Promise<void> 
   // ── Every disclosure, opened through its summary ────────────────────────
   const summaries = page.locator('details.disclose > summary');
   const count = await summaries.count();
-  expect(count, 'seven disclosures ship on this page').toBe(7);
+  expect(count, 'eight disclosures ship on this page').toBe(8);
   for (let i = 0; i < count; i++) {
     await summaries.nth(i).click();
     await expect(page.locator('details.disclose[open]')).toHaveCount(i + 1);
   }
-  await scanAt('all seven disclosures open — formulas, the paper quotes, the derivation');
+  await scanAt('all eight disclosures open — formulas, paper quotes, derivation and FABESA ground truth');
   for (let i = 0; i < count; i++) await summaries.nth(i).click();
   await expect(page.locator('details.disclose[open]')).toHaveCount(0);
 
@@ -812,6 +822,50 @@ export async function driveAllStates(page: Page, prefix: string): Promise<void> 
     'true',
   );
   await scanAt('revocation — the fixture falls back to a policy the holder satisfies');
+
+  // ── FABESA hidden-value candidate search ────────────────────────────────
+  await page.locator('#fabesa-open').click();
+  await expect(page.locator('[data-host="fabesa-attempt"] .verdict')).toHaveAttribute(
+    'data-code',
+    'FABESA_OPENED',
+  );
+  await expect(page.locator('[data-host="fabesa-attempt"] [data-aead="accepted"]')).toBeVisible();
+  await scanAt('FABESA — a wrong hidden-value candidate rejects before the second authenticates');
+
+  await page.selectOption('#fabesa-key-profile', 'wrong-values');
+  await page.locator('#fabesa-open').click();
+  await expect(page.locator('[data-host="fabesa-attempt"] .verdict')).toHaveAttribute(
+    'data-code',
+    'NO_CANDIDATE_AUTHENTICATED',
+  );
+  await scanAt('FABESA — all hidden values mismatch and every tag rejects');
+
+  await page.selectOption('#fabesa-key-profile', 'missing-names');
+  await page.locator('#fabesa-open').click();
+  await expect(page.locator('[data-host="fabesa-attempt"] .verdict')).toHaveAttribute(
+    'data-code',
+    'PUBLIC_NAMES_UNSATISFIED',
+  );
+  await scanAt('FABESA — public names fail before any cryptographic candidate trial');
+
+  await page.selectOption('#fabesa-modification', 'malformed-envelope');
+  await page.locator('#fabesa-open').click();
+  await expect(page.locator('[data-host="fabesa-attempt"] .verdict')).toHaveAttribute(
+    'data-code',
+    'MALFORMED_FABESA_CIPHERTEXT',
+  );
+  await scanAt('FABESA — malformed nonce rejected before candidate work');
+
+  await page.selectOption('#fabesa-modification', 'intact');
+  await expect(page.locator('[data-host="fabesa-attempt"] [data-retired="true"]')).toBeVisible();
+  await scanAt('FABESA — stale candidate result retired when an input changes');
+
+  await page.locator('#fabesa-run-cap').click();
+  await expect(page.locator('[data-host="fabesa-cap"] .verdict')).toHaveAttribute(
+    'data-code',
+    'CANDIDATE_LIMIT_EXCEEDED',
+  );
+  await scanAt('FABESA — candidate cap refuses before pairing or tag trials');
 
   // ── Hover, which persists after a click ─────────────────────────────────
   await page.getByRole('button', { name: 'Seal the record under this policy' }).hover();

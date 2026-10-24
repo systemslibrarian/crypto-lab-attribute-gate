@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Browser demo of FAME ciphertext-policy attribute-based encryption over BLS12-381: encrypt to a policy, watch collusion fail, and see the authority read everything.",
+  "description": "Browser demos of FAME public-policy CP-ABE and bounded FABESA hidden-value CP-A2BE over BLS12-381.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
