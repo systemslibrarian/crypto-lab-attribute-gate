@@ -222,7 +222,7 @@ The RW15 suite follows the paper and the authors' asymmetric Charm implementatio
 
 ### Proving the gates bite
 
-A green suite is not evidence until it has been watched failing. Nine mutations were applied to the source, one at a time, each confirmed to leave the build succeeding and the bundle hash changed before the owning gate was run, and each reverted immediately afterwards with the hash returning to its pre-mutation value:
+A green suite is not evidence until it has been watched failing. The nine mutations below are replayed by a committed runner, `npm run test:mutations` (`scripts/mutations.mjs`), which CI runs on every pull request and push before the deploy job and whose `mutation-evidence.json` is uploaded as the `mutation-evidence` artifact. For each recipe the runner requires the unmodified copy to pass the whole unit suite and build, the ONE named owning test to be green, the patch to change the production bundle (JavaScript and CSS are hashed, because one recipe mutates the stylesheet), the owner to go red on a test failure — a timeout, a crash, a missing module or a preview server that failed to start is refused, not counted — and the source and bundle to be restored byte for byte with the owner green again. Measured on 2026-10-27: 9 of 9 caught. The "What it reported" column records the hand-applied runs that preceded the runner; the owning test named in each recipe is the single assertion the gate now relies on.
 
 | Mutation | Owning gate | What it reported |
 |---|---|---|
@@ -234,7 +234,7 @@ A green suite is not evidence until it has been watched failing. Nine mutations 
 | The hard FABESA candidate ceiling moves from 32 to 33 | `fabesa.test.ts` | The 3-of-7 fixture reports the changed bound instead of refusing at the required candidate 33 |
 | RW15's GID random oracle hashes one constant identifier for every user | `rw15.test.ts` | 2 failures — distinct case-sensitive GIDs collide and the raw cross-GID pool recovers the protected value |
 | The epoch gate changes from `business AND epoch` to `business OR epoch` | `epoch.test.ts` | 3 failures — Bob's old business key opens current data, owner rewrap no longer excludes it, and authority escrow mints only the business label |
-| The trusted-checkpoint comparison accepts every well-shaped checkpoint | `epoch.test.ts` | 3 failures — rollback opens, a stale source checkpoint rewraps, and the executed cost ledger records the unauthorized second rewrap |
+| The trusted-checkpoint comparison accepts every well-shaped checkpoint | `epoch.test.ts` | 2 failures under the runner — the stale source checkpoint and same-epoch pseudo-update are accepted, and the executed cost ledger records the unauthorized rewrap; the runner's owner is "refuses a stale source checkpoint and a same-epoch pseudo-update" |
 
 The first attempt at the first mutation is worth recording: replacing `gtDiv` with `gtMul` left `gtDiv` unused, `tsc` refused the build, and the suite would then have run against the previous bundle — a mutation that breaks the build proves nothing at all.
 

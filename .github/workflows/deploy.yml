@@ -60,6 +60,22 @@ jobs:
       - name: Claims suite (does the page tell the truth)
         run: npm run test:claims
 
+      # Clean-baseline mutation gate. The nine mutations the README has documented
+      # by hand, replayed by scripts/mutations.mjs: each is owned by ONE named test
+      # (eight Vitest, one Playwright a11y scan), must change the production
+      # bundle, and must turn its owner red on a test failure -- timeouts, crashes
+      # and a preview server that failed to start are refused rather than counted.
+      - name: Mutation gate (clean baseline, named owning tests)
+        run: npm run test:mutations
+
+      - name: Upload mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-evidence
+          path: mutation-evidence.json
+          if-no-files-found: error
+
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
