@@ -106,7 +106,11 @@ export function renderTree(
       }
       if (opts.editable) {
         const split = button('Wrap in a gate', () => cb.onSplit(node.id), 'btn btn-small');
-        split.setAttribute('aria-label', `Wrap ${node.name} in a new gate`);
+        // The name opens with the button's own words. axe 4.14 reports
+        // label-content-name-mismatch (WCAG 2.5.3) when the accessible name does
+        // not CONTAIN the visible text, and "Wrap in a gate" is not a phrase in
+        // "Wrap Doctor in a new gate" -- the subject interrupts it.
+        split.setAttribute('aria-label', `Wrap in a gate: ${node.name}`);
         body.appendChild(split);
       }
       li.appendChild(body);
@@ -659,7 +663,9 @@ export function renderPeople(
     row.appendChild(openBtn);
 
     const reissue = button('Re-issue key', () => onReissue(p.name), 'btn btn-small');
-    reissue.setAttribute('aria-label', `Issue ${p.name} a fresh key at the current k`);
+    // Same rule: the button reads "Re-issue key", which does not appear in
+    // "Issue Alice a fresh key at the current k".
+    reissue.setAttribute('aria-label', `Re-issue key for ${p.name} at the current k`);
     row.appendChild(reissue);
 
     const revoke = button(p.revoked ? 'Reinstate' : 'Revoke', () => onRevoke(p.name), 'btn btn-small btn-danger');
