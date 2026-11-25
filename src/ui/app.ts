@@ -210,6 +210,13 @@ export class App {
       on: {
         input: (e) => {
           this.record = (e.target as HTMLInputElement).value;
+          this.envelope = null;
+          this.aesKeyHex = null;
+          this.lastAttempt = null;
+          this.retireResults(
+            'the record changed, so every result on this page was computed against different plaintext',
+          );
+          this.renderAll();
           this.markUnsealed();
         },
       },

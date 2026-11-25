@@ -1076,6 +1076,23 @@ test.describe('structural honesty', () => {
     await expect(page.locator('[data-host="seal-status"]')).toContainText('Not sealed');
   });
 
+  test('retirement: editing the record discards the envelope and retires stale success', async ({
+    page,
+  }) => {
+    await boot(page);
+    await page.getByRole('button', { name: /Try to open the sealed record with Alice/ }).click();
+    const host = page.locator('[data-host="attempt"]');
+    await expect(host.locator('.verdict')).toHaveAttribute('data-outcome', 'opened');
+
+    await page.fill('#record-input', 'CHANGED RECORD');
+
+    await expect(host.locator('[data-retired="true"]')).toHaveCount(1);
+    await expect(host).toContainText('Result retired');
+    await expect(host).toContainText('different plaintext');
+    await expect(host.locator('.verdict[data-outcome]')).toHaveCount(0);
+    await expect(page.locator('[data-host="seal-status"]')).toContainText('Not sealed');
+  });
+
   test('no-op guard: re-selecting the same policy does not retire a fresh verdict', async ({
     page,
   }) => {
